@@ -101,7 +101,7 @@
         <div class="col-12 col-lg-8 col-xl-5 order-2">
             <section class="panel" aria-labelledby="lifeHeading">
                 <h2 id="lifeHeading" class="panel-title"><span class="step">2</span> What does your life look like?</h2>
-                <p class="small text-body-secondary">Drag cards onto <strong>My Future</strong>, or tap <strong>Add</strong>. Tap a card in My Future to change it.</p>
+                <p class="small text-body-secondary">Tap <strong>Add</strong> (or drag a card onto <strong>My Future</strong>) and pick what fits your dream life. Tap a card in My Future to change it.</p>
                 <ul class="tile-palette" id="palette" aria-label="Lifestyle choices" data-dropzone="palette"></ul>
                 <h3 class="h6 mt-3 mb-2" id="canvasHeading">My Future</h3>
                 <ol class="future-canvas" id="canvas" aria-labelledby="canvasHeading" data-dropzone="canvas"></ol>
@@ -247,6 +247,23 @@
 
     <div class="print-only mt-4 small">
         <p>FuturePath summary printed <span id="printDate"></span>. Educational estimate using public data and editable assumptions; not financial, tax or career advice.</p>
+    </div>
+</div>
+
+<div class="modal fade tile-modal" id="tileModal" tabindex="-1" aria-labelledby="tileModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title h5" id="tileModalTitle"></h2>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="tileModalBody"></div>
+            <div class="modal-footer">
+                <span class="me-auto fw-semibold" id="tileModalCost" aria-live="polite"></span>
+                <button type="button" class="btn btn-outline-danger btn-sm" id="tileModalRemove">Remove</button>
+                <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Done</button>
+            </div>
+        </div>
     </div>
 </div>
 

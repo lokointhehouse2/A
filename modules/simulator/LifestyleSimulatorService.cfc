@@ -15,6 +15,7 @@ component {
     variables.tileTypes = "apartment,house,roommates,car,second_car,children,childcare,travel,savings,student_debt";
     variables.percentiles = "p10,p25,median,p75,p90,mean";
     variables.ageGroups = "child_1,child_2_3,child_4_5,child_6_8,child_9_11";
+    variables.tripKinds = [ "local", "usa", "cruise", "world" ];
 
     public LifestyleSimulatorService function init( required any config, required any taxes, required any loans ) {
         variables.config = arguments.config;
@@ -105,6 +106,7 @@ component {
             case "house":
                 out.bedrooms = arguments.v.intInRange( arguments.t.bedrooms ?: 3, 1, 6, 3, "house.bedrooms" );
                 out.price = optionalNumber( arguments.t.price ?: javacast( "null", "" ), arguments.v, 10000, 20000000, "house.price" );
+                out.tier = arguments.v.oneOf( arguments.t.tier ?: "cozy", presetKeys( "house" ), "cozy", "house.tier" );
                 break;
             case "roommates":
                 out.count = arguments.v.intInRange( arguments.t.count ?: 1, 1, 4, 1, "roommates.count" );
@@ -112,6 +114,7 @@ component {
             case "car":
             case "second_car":
                 out.price = optionalNumber( arguments.t.price ?: javacast( "null", "" ), arguments.v, 0, 300000, "car.price" );
+                out.tier = arguments.v.oneOf( arguments.t.tier ?: "standard", presetKeys( "car" ), "standard", "car.tier" );
                 break;
             case "children":
                 out.count = arguments.v.intInRange( arguments.t.count ?: 1, 1, 6, 1, "children.count" );
@@ -119,9 +122,14 @@ component {
                 break;
             case "childcare":
                 out.children = isNull( arguments.t.children ) ? javacast( "null", "" ) : arguments.v.intInRange( arguments.t.children, 0, 6, 1, "childcare.children" );
+                out.tier = arguments.v.oneOf( arguments.t.tier ?: "middle", presetKeys( "childcare" ), "middle", "childcare.tier" );
                 break;
             case "travel":
                 out.annual = optionalNumber( arguments.t.annual ?: javacast( "null", "" ), arguments.v, 0, 100000, "travel.annual" );
+                if ( isStruct( arguments.t.trips ?: "" ) ) {
+                    out.trips = {};
+                    for ( var kind in variables.tripKinds ) out.trips[ kind ] = arguments.v.intInRange( arguments.t.trips[ kind ] ?: 0, 0, 12, 0, "travel.trips.#kind#" );
+                }
                 break;
             case "savings":
                 out.monthly = optionalNumber( arguments.t.monthly ?: javacast( "null", "" ), arguments.v, 0, 20000, "savings.monthly" );
@@ -227,7 +235,9 @@ component {
             arrayAppend( lines, line( "renters_insurance", "Renter's insurance", "housing", A.renterInsuranceMonthly, "assumption", "FuturePath assumption", "" ) );
         } else if ( housingMode == "own" ) {
             var house = tile.house;
-            var price = house.price ?: ( isStruct( ref.housing.homeValue ?: "" ) ? ref.housing.homeValue.value : javacast( "null", "" ) );
+            var houseLevel = presetFor( "house", house.tier ?: "" );
+            var houseMult = isNull( houseLevel ) ? 1 : houseLevel.priceMultiplier;
+            var price = house.price ?: ( isStruct( ref.housing.homeValue ?: "" ) ? ref.housing.homeValue.value * houseMult : javacast( "null", "" ) );
             var priceBasis = isNull( house.price ) ? "sourced" : "user";
             if ( isNull( price ) ) {
                 complete = false;
@@ -239,7 +249,8 @@ component {
                 var mort = variables.loans.amortize( loanAmount, A.mortgageRatePct, A.mortgageTermYears * 12 );
                 upfront.downPayment = price * A.downPaymentPct / 100;
                 upfront.closingCosts = price * A.closingCostPct / 100;
-                var priceLabel = ( priceBasis == "sourced" ? "Metro median home value " : "Home price " ) & "$" & numberFormat( price, "," );
+                var priceLabel = priceBasis != "sourced" ? "Home price $" & numberFormat( price, "," )
+                    : ( !isNull( houseLevel ) && houseMult != 1 ? "#houseLevel.label# home ($#numberFormat( price, ',' )#, #houseMult#x metro median $#numberFormat( ref.housing.homeValue.value, ',' )#)" : "Metro median home value $" & numberFormat( price, "," ) );
                 arrayAppend( lines, line( "mortgage", "Mortgage (principal + interest)", "housing", mort.payment, "assumption", priceLabel & ", #A.downPaymentPct#% down, #A.mortgageRatePct#% for #A.mortgageTermYears# years", "" ) );
                 arrayAppend( lines, line( "property_tax", "Property tax", "housing", price * A.propertyTaxPct / 100 / 12, "assumption", "#A.propertyTaxPct#% of value per year", "Property tax rates vary by county." ) );
                 arrayAppend( lines, line( "home_insurance", "Homeowner's insurance", "housing", A.homeInsuranceMonthly, "assumption", "FuturePath assumption", "" ) );
@@ -256,12 +267,14 @@ component {
         var cars = ( structKeyExists( tile, "car" ) ? 1 : 0 ) + ( structKeyExists( tile, "second_car" ) ? 1 : 0 );
         for ( var ct in [ "car", "second_car" ] ) {
             if ( !structKeyExists( tile, ct ) ) continue;
-            var carPrice = tile[ ct ].price ?: A.carPrice;
+            var carLevel = presetFor( "car", tile[ ct ].tier ?: "" );
+            var carPrice = tile[ ct ].price ?: A.carPrice * ( isNull( carLevel ) ? 1 : carLevel.priceMultiplier );
             var carLoan = variables.loans.amortize( carPrice * ( 1 - A.carDownPaymentPct / 100 ), A.carAprPct, A.carTermMonths );
             var label = ct == "car" ? "Car" : "Second car";
-            arrayAppend( lines, line( ct & "_payment", "#label# payment", "transportation", carLoan.payment, "assumption", "$#numberFormat( carPrice, ',' )# car, #A.carDownPaymentPct#% down, #A.carAprPct#% for #A.carTermMonths# months", "" ) );
-            arrayAppend( lines, line( ct & "_insurance", "#label# insurance", "transportation", A.carInsuranceMonthly, "assumption", "FuturePath assumption", "" ) );
-            arrayAppend( lines, line( ct & "_running", "#label# gas and maintenance", "transportation", A.carFuelMaintenanceMonthly, "assumption", "FuturePath assumption", "" ) );
+            var levelText = isNull( carLevel ) ? "" : carLevel.label & " ";
+            arrayAppend( lines, line( ct & "_payment", "#label# payment", "transportation", carLoan.payment, "assumption", "$#numberFormat( carPrice, ',' )# #lCase( levelText )#car, #A.carDownPaymentPct#% down, #A.carAprPct#% for #A.carTermMonths# months", "" ) );
+            arrayAppend( lines, line( ct & "_insurance", "#label# insurance", "transportation", A.carInsuranceMonthly * ( isNull( carLevel ) ? 1 : carLevel.insuranceMultiplier ), "assumption", levelText & "FuturePath assumption", "" ) );
+            arrayAppend( lines, line( ct & "_running", "#label# gas and maintenance", "transportation", A.carFuelMaintenanceMonthly * ( isNull( carLevel ) ? 1 : carLevel.runningMultiplier ), "assumption", levelText & "FuturePath assumption", "" ) );
         }
         if ( cars == 0 ) arrayAppend( lines, line( "transit", "Public transit", "transportation", A.transitMonthlyPerAdult * s.adults, "assumption", "FuturePath assumption", "" ) );
 
@@ -282,7 +295,9 @@ component {
                 arrayAppend( warnings, "Childcare needs the Children tile." );
             } else {
                 var inCare = min( children, tile.childcare.children ?: children );
-                arrayAppend( lines, line( "childcare", "Childcare (#inCare# child#inCare == 1 ? '' : 'ren'#)", "childcare", inCare * A.childcareMonthlyPerChild, "assumption", "FuturePath assumption", "Childcare prices vary a lot by city and age." ) );
+                var careLevel = presetFor( "childcare", tile.childcare.tier ?: "" );
+                arrayAppend( lines, line( "childcare", "Childcare (#inCare# child#inCare == 1 ? '' : 'ren'#)", "childcare", inCare * A.childcareMonthlyPerChild * ( isNull( careLevel ) ? 1 : careLevel.costMultiplier ),
+                    "assumption", isNull( careLevel ) ? "FuturePath assumption" : "#careLevel.label# care: #lCase( careLevel.examples )#", "Childcare prices vary a lot by city and age." ) );
             }
         }
 
@@ -314,7 +329,12 @@ component {
         }
 
         // goals
-        if ( structKeyExists( tile, "travel" ) ) arrayAppend( lines, line( "travel", "Travel and vacations", "savings", ( tile.travel.annual ?: A.travelAnnual ) / 12, isNull( tile.travel.annual ) ? "assumption" : "user", "", "" ) );
+        if ( structKeyExists( tile, "travel" ) ) {
+            var plan = isNull( tile.travel.annual ) ? travelPlan( tile.travel, members ) : javacast( "null", "" );
+            if ( !isNull( tile.travel.annual ) ) arrayAppend( lines, line( "travel", "Travel and vacations", "savings", tile.travel.annual / 12, "user", "", "" ) );
+            else if ( !isNull( plan ) ) arrayAppend( lines, line( "travel", "Travel and vacations", "savings", plan.annual / 12, "assumption", plan.detail, "Typical trip costs per person; real prices vary by season and destination." ) );
+            else arrayAppend( lines, line( "travel", "Travel and vacations", "savings", A.travelAnnual / 12, "assumption", "", "" ) );
+        }
         if ( structKeyExists( tile, "savings" ) ) arrayAppend( lines, line( "emergency_savings", "Savings", "savings", tile.savings.monthly ?: A.emergencySavingsMonthly, isNull( tile.savings.monthly ) ? "assumption" : "user", "", "" ) );
 
         var monthlyCosts = 0;
@@ -383,6 +403,36 @@ component {
             out[ k ] = arguments.scenario.assumptions[ k ] ?: variables.assumptions.items[ k ].value;
         }
         return out;
+    }
+
+    private string function presetKeys( required string group ) {
+        var g = variables.assumptions.presets[ arguments.group ] ?: {};
+        return structKeyList( g );
+    }
+
+    /** Lifestyle level (e.g. car "luxury") from assumptions.json presets; null when missing or unknown. */
+    private any function presetFor( required string group, required string key ) {
+        if ( !len( arguments.key ) ) return javacast( "null", "" );
+        var g = variables.assumptions.presets[ arguments.group ] ?: {};
+        return g[ arguments.key ] ?: javacast( "null", "" );
+    }
+
+    /** Yearly travel cost from trips per year x cost per person x travelers; null when the tile has no trip plan. */
+    private any function travelPlan( required struct travel, required numeric travelers ) {
+        if ( !isStruct( arguments.travel.trips ?: "" ) ) return javacast( "null", "" );
+        var annual = 0;
+        var parts = [];
+        for ( var kind in variables.tripKinds ) {
+            var n = arguments.travel.trips[ kind ] ?: 0;
+            var p = presetFor( "travel", kind );
+            if ( n <= 0 || isNull( p ) ) continue;
+            annual += n * p.costPerPerson * arguments.travelers;
+            arrayAppend( parts, "#p.label# x#n#" );
+        }
+        return {
+            annual: annual,
+            detail: arrayLen( parts ) ? arrayToList( parts, ", " ) & " per year for #arguments.travelers# traveler#arguments.travelers == 1 ? '' : 's'#" : "No trips planned"
+        };
     }
 
     private struct function tileIndex( required array tiles ) {

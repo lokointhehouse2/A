@@ -23,6 +23,7 @@
     function frame(id) { return document.getElementById(id).contentWindow; }
     function q(w, sel) { return w.document.querySelector(sel); }
     function tilesOf(w) { return w.FPBuilder.getState().tiles.map(function (t) { return t.type; }); }
+    function getTileOf(w, type) { return w.FPBuilder.getState().tiles.filter(function (t) { return t.type === type; })[0] || {}; }
     function costs(w) { var r = w.FPBuilder.lastResult(); return r ? Math.round(r.costs.monthlyTotal * 100) / 100 : null; }
     function dragDrop(w, sourceSel, targetSel) {
         var src = q(w, sourceSel), dst = q(w, targetSel);
@@ -82,12 +83,27 @@
             dragDrop(w, '#canvas [data-tile=children]', '#palette');
             log(tilesOf(w).indexOf('children') < 0, 'dragging a tile out of My Future removes it');
 
-            // Inline editing without a page transition.
+            // Editing in the pop-up without a page transition.
             q(w, '#canvas [data-tile=apartment] .tile-toggle').click();
-            var twoBr = await waitFor(function () { return Array.prototype.filter.call(w.document.querySelectorAll('#canvas [data-tile=apartment] .seg button'), function (b) { return b.textContent === '2'; })[0]; }, 3000, 'bedroom control');
+            var twoBr = await waitFor(function () { return q(w, '#tileModal [role=radio][data-value="2"]'); }, 3000, 'bedroom option');
             var c1 = costs(w);
             twoBr.click();
-            log(w.FPBuilder.getState().tiles[0].bedrooms === 2 && costs(w) !== c1, 'inline tile controls update the budget in place', c1 + ' -> ' + costs(w));
+            log(w.FPBuilder.getState().tiles[0].bedrooms === 2 && costs(w) !== c1, 'pop-up options update the budget in place', c1 + ' -> ' + costs(w));
+
+            // Car type sets the price level; trips per year drive the travel budget.
+            q(w, '#canvas [data-tile=car] .tile-toggle').click();
+            var lux = await waitFor(function () { return q(w, '#tileModal [role=radio][data-value="luxury"]'); }, 3000, 'car options');
+            var c2 = costs(w);
+            lux.click();
+            log(getTileOf(w, 'car').tier === 'luxury' && costs(w) > c2, 'choosing a luxury car raises costs', c2 + ' -> ' + costs(w));
+            q(w, '#palette [data-tile=travel] button').click();
+            var plus = await waitFor(function () { return q(w, '#trip-cruise-plus'); }, 3000, 'trip stepper');
+            var c3 = costs(w);
+            plus.click();
+            log(getTileOf(w, 'travel').trips.cruise === 1 && costs(w) > c3, 'adding a cruise a year raises the travel budget', c3 + ' -> ' + costs(w));
+            q(w, '#tileModal [data-bs-dismiss=modal]').click();
+            await sleep(500);
+            q(w, '#canvas [data-tile=travel] .icon-remove').click();
 
             // Fast successive city changes: the last choice wins even if earlier responses arrive late.
             q(w, '[data-metro="35620"]').click();

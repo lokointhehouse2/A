@@ -18,31 +18,39 @@
 
     // ------------------------------------------------------------------ tiles
     var TILES = {
-        apartment: { icon: '\u{1F3E0}', label: 'Apartment', desc: 'Rent a place (rent includes utilities)' },
-        house: { icon: '\u{1F3E1}', label: 'House', desc: 'Buy a home with a mortgage' },
+        apartment: { icon: '\u{1F3E0}', label: 'Apartment', desc: 'Rent a place (Census median rent)' },
+        house: { icon: '\u{1F3E1}', label: 'House', desc: 'Buy a home: cozy to mansion' },
         roommates: { icon: '\u{1F465}', label: 'Roommates', desc: 'Split the rent' },
-        car: { icon: '\u{1F697}', label: 'Car', desc: 'Payment, insurance, gas' },
+        car: { icon: '\u{1F697}', label: 'Car', desc: 'Compact, standard or luxury' },
         second_car: { icon: '\u{1F699}', label: 'Second car', desc: 'Another vehicle' },
-        children: { icon: '\u{1F476}', label: 'Children', desc: 'Kids at home' },
-        childcare: { icon: '\u{1F9F8}', label: 'Childcare', desc: 'Daycare or after-school care' },
-        travel: { icon: '✈️', label: 'Travel', desc: 'Trips and vacations' },
+        children: { icon: '\u{1F476}', label: 'Children', desc: 'How many kids?' },
+        childcare: { icon: '\u{1F9F8}', label: 'Daycare', desc: 'Low-end to high-end care' },
+        travel: { icon: '✈️', label: 'Travel', desc: 'Getaways, cruises, world trips' },
         savings: { icon: '\u{1F437}', label: 'Savings', desc: 'Money set aside each month' },
-        student_debt: { icon: '\u{1F393}', label: 'Student debt', desc: 'Loan payments after school' }
+        student_debt: { icon: '\u{1F393}', label: 'Student debt', desc: 'Shows up when you pick a degree' }
     };
     var TILE_ORDER = ['apartment', 'house', 'roommates', 'car', 'second_car', 'children', 'childcare', 'travel', 'savings', 'student_debt'];
+    var PALETTE_ORDER = TILE_ORDER.filter(function (t) { return t !== 'student_debt'; });
     var SCHOOL_PATHS = ['certificate', 'associate', 'bachelor', 'master', 'doctoral', 'professional', 'medicine'];
     var GRAD_PATHS = ['master', 'doctoral', 'professional', 'medicine'];
-    var AGE_GROUPS = { child_1: 'Age 1', child_2_3: 'Ages 2-3', child_4_5: 'Ages 4-5', child_6_8: 'Ages 6-8', child_9_11: 'Ages 9-11' };
+    var PRESETS = DEF.presets || { house: {}, car: {}, childcare: {}, travel: {} };
+    var LEVEL_ICONS = {
+        house: { cozy: '\u{1F3E0}', standard: '\u{1F3E1}', luxurious: '\u{1F3D8}️', mansion: '\u{1F3F0}' },
+        car: { compact: '\u{1F697}', standard: '\u{1F699}', luxury: '\u{1F3CE}️' },
+        childcare: { low: '\u{1F475}', middle: '\u{1F3EB}', high: '⭐' },
+        travel: { local: '\u{1F3D5}️', usa: '\u{1F5FD}', cruise: '\u{1F6F3}️', world: '\u{1F30D}' }
+    };
+    var MAX_TRIPS = 12;
 
     function defaultTile(type) {
         switch (type) {
             case 'apartment': return { type: type, bedrooms: 1, benchmark: 'acs', customRent: null };
-            case 'house': return { type: type, bedrooms: 3, price: null };
+            case 'house': return { type: type, bedrooms: 3, price: null, tier: 'cozy' };
             case 'roommates': return { type: type, count: 1 };
-            case 'car': case 'second_car': return { type: type, price: null };
+            case 'car': case 'second_car': return { type: type, price: null, tier: 'standard' };
             case 'children': return { type: type, count: 1, ageGroup: 'child_6_8' };
-            case 'childcare': return { type: type, children: null };
-            case 'travel': return { type: type, annual: null };
+            case 'childcare': return { type: type, children: null, tier: 'middle' };
+            case 'travel': return { type: type, annual: null, trips: { local: 2, usa: 0, cruise: 0, world: 0 } };
             case 'savings': return { type: type, monthly: null };
             case 'student_debt': return { type: type, principal: null };
         }
@@ -86,7 +94,13 @@
             var seen = {};
             s.tiles = raw.tiles.filter(function (t) { return t && TILES[t.type] && !seen[t.type] && (seen[t.type] = true); }).map(function (t) {
                 var base = defaultTile(t.type);
-                Object.keys(base).forEach(function (k) { if (k !== 'type' && t[k] !== undefined) base[k] = t[k]; });
+                Object.keys(base).forEach(function (k) { if (k !== 'type' && k !== 'trips' && t[k] !== undefined) base[k] = t[k]; });
+                var group = { house: 'house', car: 'car', second_car: 'car', childcare: 'childcare' }[t.type];
+                if (group && !PRESETS[group][base.tier]) base.tier = defaultTile(t.type).tier;
+                if (t.type === 'apartment') { base.benchmark = 'acs'; base.customRent = null; }
+                if (t.type === 'travel' && t.trips && typeof t.trips === 'object') {
+                    E.TRIP_KINDS.forEach(function (k) { base.trips[k] = Math.round(num(t.trips[k], 0, MAX_TRIPS, 0)); });
+                }
                 return base;
             });
         }
@@ -115,7 +129,6 @@
     // ------------------------------------------------------------------ state, history, persistence
     var state = defaultScenario();
     var undoStack = [], redoStack = [];
-    var expanded = {};
     var lastResult = null;
     var cache = { occupations: {}, programs: {}, careersForCip: {}, pathways: null, metros: {} };
 
@@ -155,7 +168,6 @@
             if (type === 'children') { /* children change food, healthcare and taxes */ }
             if (index === undefined || index < 0 || index > s.tiles.length) s.tiles.push(t); else s.tiles.splice(index, 0, t);
         }, 'Added ' + TILES[type].label);
-        expanded[type] = true;
     }
     function removeTile(type) {
         if (!hasTile(type)) return;
@@ -226,6 +238,7 @@
         }
         renderBudget(lastResult, current.bundle);
         renderPathSummary();
+        renderTileModal();
         refreshCompareFromState();
     }
 
@@ -240,14 +253,14 @@
     function renderPalette() {
         var pal = $('palette');
         pal.textContent = '';
-        TILE_ORDER.forEach(function (type) {
+        PALETTE_ORDER.forEach(function (type) {
             var t = TILES[type];
             var active = hasTile(type);
             var li = el('li', { class: 'tile-card' + (active ? ' is-active' : ''), draggable: active ? null : 'true', dataset: { tile: type } }, [
                 el('span', { class: 'tile-icon', 'aria-hidden': 'true', text: t.icon }),
                 el('span', { class: 'tile-text' }, [el('span', { class: 'tile-label', text: t.label }), el('span', { class: 'tile-desc', text: t.desc })]),
-                el('button', { type: 'button', class: 'btn btn-sm ' + (active ? 'btn-light' : 'btn-outline-primary'), disabled: active, 'aria-label': active ? t.label + ' is in My Future' : 'Add ' + t.label + ' to My Future',
-                    onclick: function () { addTile(type); focusCanvasTile(type); } }, [active ? 'Added' : 'Add'])
+                el('button', { type: 'button', class: 'btn btn-sm ' + (active ? 'btn-light' : 'btn-outline-primary'), disabled: active, 'aria-label': active ? t.label + ' is in My Future' : 'Add ' + t.label + ' to My Future', 'aria-haspopup': 'dialog',
+                    onclick: function () { addTile(type); openTileModal(type); } }, [active ? 'Added' : 'Add'])
             ]);
             li.addEventListener('dragstart', function (e) { e.dataTransfer.setData('text/plain', JSON.stringify({ kind: 'tile', type: type })); e.dataTransfer.effectAllowed = 'copy'; li.classList.add('is-dragging'); });
             li.addEventListener('dragend', function () { li.classList.remove('is-dragging'); });
@@ -259,18 +272,47 @@
         window.setTimeout(function () { var b = document.querySelector('#canvas [data-tile="' + type + '"] .tile-toggle'); if (b) b.focus(); }, 30);
     }
 
+    function bedLabel(n) { return n === 0 ? 'Studio' : n + ' bedroom' + (n > 1 ? 's' : ''); }
+    function acsRent(n) { var b = current.bundle; return b && b.housing.acs.rents ? b.housing.acs.rents[String(n)] : null; }
+    function housePrice(tier) {
+        var b = current.bundle, p = PRESETS.house[tier];
+        return b && b.housing.homeValue ? b.housing.homeValue.value * (p ? p.priceMultiplier : 1) : null;
+    }
+    function carPrice(tier) { var p = PRESETS.car[tier]; return assumption('carPrice') * (p ? p.priceMultiplier : 1); }
+    function careRate(tier) { var p = PRESETS.childcare[tier]; return assumption('childcareMonthlyPerChild') * (p ? p.costMultiplier : 1); }
+    function travelers() { var k = getTile('children'); return state.adults + (k ? k.count : 0); }
+    function travelAnnual(trips) {
+        var people = travelers();
+        return E.TRIP_KINDS.reduce(function (sum, k) { var p = PRESETS.travel[k]; return sum + (p ? (trips[k] || 0) * p.costPerPerson * people : 0); }, 0);
+    }
+    function tripsSummary(trips) {
+        var parts = E.TRIP_KINDS.filter(function (k) { return trips[k] > 0 && PRESETS.travel[k]; }).map(function (k) { return trips[k] + ' ' + PRESETS.travel[k].label.toLowerCase(); });
+        return parts.length ? parts.join(', ') : 'No trips planned';
+    }
+
     function tileSummary(t) {
-        var b = current.bundle;
+        var level;
         switch (t.type) {
-            case 'apartment': return (t.bedrooms === 0 ? 'Studio' : t.bedrooms + ' bedroom' + (t.bedrooms > 1 ? 's' : '')) + ' · ' + (t.customRent !== null ? 'your rent ' + FP.money(t.customRent) : (t.benchmark === 'hud' ? 'HUD Fair Market Rent' : 'ACS median rent'));
-            case 'house': return t.price !== null ? FP.money(t.price) + ' home' : 'Metro median home' + (b && b.housing.homeValue ? ' (' + FP.money(b.housing.homeValue.value) + ')' : '');
+            case 'apartment': return bedLabel(t.bedrooms) + ' · ' + FP.money(acsRent(t.bedrooms), { fallback: 'rent not published' }) + '/mo Census median';
+            case 'house':
+                level = PRESETS.house[t.tier];
+                if (t.price !== null) return FP.money(t.price) + ' home';
+                return (level ? level.label + ' · ' + level.size : 'Metro median home') + (housePrice(t.tier) !== null ? ' · ' + FP.money(housePrice(t.tier)) : '');
             case 'roommates': return t.count + ' roommate' + (t.count > 1 ? 's' : '');
-            case 'car': case 'second_car': return FP.money(t.price !== null ? t.price : assumption('carPrice')) + ' car';
-            case 'children': return t.count + ' child' + (t.count > 1 ? 'ren' : '') + ' · ' + AGE_GROUPS[t.ageGroup];
-            case 'childcare': return (t.children === null ? 'all children' : t.children + ' in care') + ' · ' + FP.money(assumption('childcareMonthlyPerChild')) + '/child';
-            case 'travel': return FP.money(t.annual !== null ? t.annual : assumption('travelAnnual')) + ' per year';
+            case 'car': case 'second_car':
+                level = PRESETS.car[t.tier];
+                return (level ? level.label + ' · ' : '') + FP.money(t.price !== null ? t.price : carPrice(t.tier)) + (level ? ' · like a ' + level.examples.split(',')[0] : ' car');
+            case 'children': return t.count + ' child' + (t.count > 1 ? 'ren' : '');
+            case 'childcare':
+                level = PRESETS.childcare[t.tier];
+                return (level ? level.label + ' · ' : '') + FP.money(careRate(t.tier)) + '/child · ' + (t.children === null ? 'all children' : t.children + ' in care');
+            case 'travel':
+                if (t.annual !== null) return FP.money(t.annual) + ' per year';
+                return tripsSummary(t.trips) + ' · ' + FP.money(travelAnnual(t.trips)) + '/yr';
             case 'savings': return FP.money(t.monthly !== null ? t.monthly : assumption('emergencySavingsMonthly')) + ' per month';
-            case 'student_debt': return t.principal !== null ? FP.money(t.principal) + ' borrowed' : 'From your school choice';
+            case 'student_debt':
+                if (t.principal !== null) return FP.money(t.principal) + ' borrowed';
+                return lastResult && lastResult.education.borrowed !== null ? FP.money(lastResult.education.borrowed) + ' from your school choice' : 'From your school choice';
         }
         return '';
     }
@@ -290,48 +332,142 @@
         return el('div', { class: 'mb-2' }, [el('label', { class: 'form-label small mb-0', for: id, text: label }), input]);
     }
 
-    function tileControls(t) {
-        var box = el('div', { class: 'tile-controls' });
+    // ------------------------------------------------------------------ tile modal
+    // Every card is edited in one pop-up with big picture options. Choices apply immediately (the budget behind the
+    // dialog updates live); Done closes it and Undo still works.
+    var modalType = null, modal = null;
+
+    /** Monthly cost this card adds to the budget (with the card vs without it), or null while data loads. */
+    function monthlyWith(type, patch) {
+        if (!current.bundle) return null;
+        var without = JSON.parse(JSON.stringify(state));
+        without.tiles = without.tiles.filter(function (t) { return t.type !== type; });
+        var withIt = JSON.parse(JSON.stringify(state));
+        var t = withIt.tiles.filter(function (x) { return x.type === type; })[0];
+        if (!t) { t = defaultTile(type); withIt.tiles.push(t); }
+        Object.keys(patch || {}).forEach(function (k) { t[k] = patch[k]; });
+        if (type === 'apartment') withIt.tiles = withIt.tiles.filter(function (x) { return x.type !== 'house'; });
+        try {
+            return E.compute(withIt, current.bundle, DEF, { includeTimeline: false }).costs.monthlyTotal - E.compute(without, current.bundle, DEF, { includeTimeline: false }).costs.monthlyTotal;
+        } catch (e) { return null; }
+    }
+    function perMonth(v) { return v === null ? '…' : (v < 0 ? 'saves ' + FP.money(-v) : 'about ' + FP.money(v)) + '/mo'; }
+
+    /** Big radio cards: [{ value, icon, title, sub, examples, cue }]. */
+    function optionGrid(label, idPrefix, options, value, onPick) {
+        var grid = el('div', { class: 'opt-grid', role: 'radiogroup', 'aria-label': label });
+        options.forEach(function (o) {
+            grid.appendChild(el('button', { type: 'button', class: 'opt-card', role: 'radio', id: idPrefix + '-' + o.value, 'aria-checked': String(o.value === value), dataset: { value: String(o.value) },
+                onclick: function () { onPick(o.value); } }, [
+                o.icon ? el('span', { class: 'opt-icon', 'aria-hidden': 'true', text: o.icon }) : null,
+                el('span', { class: 'opt-title', text: o.title }),
+                o.sub ? el('span', { class: 'opt-sub', text: o.sub }) : null,
+                o.examples ? el('span', { class: 'opt-examples', text: o.examples }) : null,
+                o.cue ? el('span', { class: 'opt-cue', text: o.cue }) : null
+            ]));
+        });
+        return grid;
+    }
+    function levelOptions(group, mapCue) {
+        return Object.keys(PRESETS[group] || {}).map(function (k) {
+            var p = PRESETS[group][k];
+            return { value: k, icon: LEVEL_ICONS[group][k], title: p.label, sub: p.size || '', examples: p.examples, cue: mapCue(k, p) };
+        });
+    }
+    function note(text) { return el('p', { class: 'small text-body-secondary mt-3 mb-0', text: text }); }
+    function heading(text) { return el('h3', { class: 'h6 mt-3 mb-2', text: text }); }
+
+    function modalBody(t) {
+        var box = el('div');
         var b = current.bundle;
         switch (t.type) {
             case 'apartment':
-                box.appendChild(el('div', { class: 'small mb-1', text: 'Bedrooms' }));
-                box.appendChild(segControl('Bedrooms', [0, 1, 2, 3, 4].map(function (n) { return { value: n, label: n === 0 ? 'Studio' : String(n) }; }), t.bedrooms, function (v) { updateTile('apartment', { bedrooms: v }, 'Apartment set to ' + (v === 0 ? 'studio' : v + ' bedrooms')); }));
-                box.appendChild(el('div', { class: 'small mt-2 mb-1', text: 'Rent benchmark' }));
-                box.appendChild(segControl('Rent benchmark', [{ value: 'acs', label: 'Census median' }, { value: 'hud', label: 'HUD Fair Market Rent' }], t.benchmark, function (v) { updateTile('apartment', { benchmark: v }, 'Rent benchmark changed'); }));
-                if (b) box.appendChild(rentTable(b, t.bedrooms));
-                box.appendChild(numberField('apt-rent', 'Or enter your own monthly rent', t.customRent, 'Leave blank to use the benchmark', function (v) { updateTile('apartment', { customRent: v }, 'Rent updated'); }, { max: 50000 }));
+                box.appendChild(el('p', { class: 'mb-2', text: 'How many bedrooms?' }));
+                box.appendChild(optionGrid('Bedrooms', 'opt-apt', [0, 1, 2, 3, 4].map(function (n) {
+                    return { value: n, icon: n === 0 ? '\u{1F6CB}️' : '\u{1F6CF}️'.repeat(Math.min(n, 3)) + (n > 3 ? '+' : ''), title: bedLabel(n), cue: FP.money(acsRent(n), { fallback: 'not published' }) + '/mo rent' };
+                }), t.bedrooms, function (v) { updateTile('apartment', { bedrooms: v }, 'Apartment set to ' + bedLabel(v).toLowerCase()); }));
+                box.appendChild(note('Census median rent for this metro' + (b && b.housing.acs.period ? ' (ACS ' + b.housing.acs.period + ')' : '') + ', utilities included. Half of renters pay less, half pay more.'));
                 break;
             case 'house':
-                box.appendChild(numberField('house-price', 'Home price', t.price, b && b.housing.homeValue ? 'Metro median ' + FP.money(b.housing.homeValue.value) : 'Enter a price', function (v) { updateTile('house', { price: v }, 'Home price updated'); }, { min: 10000, max: 20000000 }));
-                box.appendChild(numberField('house-down', 'Down payment (%)', assumption('downPaymentPct'), '', function (v) { setAssumption('downPaymentPct', v); }, { max: 100 }));
-                box.appendChild(numberField('house-rate', 'Mortgage rate (% APR, assumption)', assumption('mortgageRatePct'), '', function (v) { setAssumption('mortgageRatePct', v); }, { max: 20 }));
-                if (b && b.housing.homeValue) box.appendChild(el('p', { class: 'small text-body-secondary mb-0', text: b.housing.homeValue.label + ': ' + FP.money(b.housing.homeValue.value) + ' (' + b.housing.homeValue.period + '). ' + b.housing.homeValue.note }));
-                break;
-            case 'roommates':
-                box.appendChild(segControl('Number of roommates', [1, 2, 3, 4].map(function (n) { return { value: n, label: String(n) }; }), t.count, function (v) { updateTile('roommates', { count: v }, v + ' roommates'); }));
-                box.appendChild(el('p', { class: 'small text-body-secondary mt-2 mb-0', text: 'Rent is split evenly. Add bedrooms in the Apartment card so everyone has a room.' }));
+                box.appendChild(el('p', { class: 'mb-2', text: 'What kind of home do you see yourself in?' }));
+                box.appendChild(optionGrid('Home style', 'opt-house', levelOptions('house', function (k) {
+                    var price = housePrice(k);
+                    return (price !== null ? FP.money(price) + ' · ' : '') + perMonth(monthlyWith('house', { tier: k, price: null }));
+                }), t.price === null ? t.tier : null, function (v) { updateTile('house', { tier: v, price: null, bedrooms: PRESETS.house[v].bedrooms }, PRESETS.house[v].label + ' home'); }));
+                box.appendChild(note('Prices start from the metro median home value' + (b && b.housing.homeValue ? ' (' + FP.money(b.housing.homeValue.value) + ', ' + b.housing.homeValue.period + ')' : '') + ' and scale up with size. Monthly cost includes mortgage, property tax, insurance, maintenance and utilities with ' + assumption('downPaymentPct') + '% down at ' + assumption('mortgageRatePct') + '% (change in advanced assumptions).'));
                 break;
             case 'car': case 'second_car':
-                box.appendChild(numberField(t.type + '-price', 'Car price', t.price, 'Default ' + FP.money(assumption('carPrice')), function (v) { updateTile(t.type, { price: v }, 'Car price updated'); }, { max: 300000 }));
-                box.appendChild(el('p', { class: 'small text-body-secondary mb-0', text: 'Loan, insurance and gas use editable assumptions (see Advanced assumptions).' }));
+                box.appendChild(el('p', { class: 'mb-2', text: 'What kind of car?' }));
+                box.appendChild(optionGrid('Car type', 'opt-' + t.type, levelOptions('car', function (k) {
+                    return FP.money(carPrice(k)) + ' · ' + perMonth(monthlyWith(t.type, { tier: k, price: null }));
+                }), t.price === null ? t.tier : null, function (v) { updateTile(t.type, { tier: v, price: null }, PRESETS.car[v].label + ' car'); }));
+                box.appendChild(note('Monthly cost includes the loan payment, insurance, gas and maintenance. Fancier cars cost more to insure and run.'));
                 break;
             case 'children':
-                box.appendChild(segControl('Number of children', [1, 2, 3, 4].map(function (n) { return { value: n, label: String(n) }; }), t.count, function (v) { updateTile('children', { count: v }, v + ' children'); }));
-                var sel = el('select', { class: 'form-select form-select-sm mt-2', 'aria-label': 'Children ages' });
-                Object.keys(AGE_GROUPS).forEach(function (k) { var o = el('option', { value: k, text: AGE_GROUPS[k] }); if (k === t.ageGroup) o.selected = true; sel.appendChild(o); });
-                sel.addEventListener('change', function () { updateTile('children', { ageGroup: sel.value }, 'Children ages updated'); });
-                box.appendChild(sel);
-                box.appendChild(el('p', { class: 'small text-body-secondary mt-2 mb-0', text: 'Children change food (USDA), health costs and taxes (Child Tax Credit).' }));
+                box.appendChild(el('p', { class: 'mb-2', text: 'How many kids?' }));
+                box.appendChild(optionGrid('Number of children', 'opt-kids', [1, 2, 3, 4, 5, 6].map(function (n) {
+                    return { value: n, icon: '\u{1F9D2}'.repeat(Math.min(n, 3)) + (n > 3 ? '+' : ''), title: n + (n === 1 ? ' child' : ' children'), cue: perMonth(monthlyWith('children', { count: n })) };
+                }), t.count, function (v) { updateTile('children', { count: v }, v + (v === 1 ? ' child' : ' children')); }));
+                box.appendChild(note('Kids change groceries (USDA food plans), health costs and taxes (Child Tax Credit). Add Daycare if they need care while you work.'));
                 break;
             case 'childcare':
                 var kids = getTile('children') ? getTile('children').count : 0;
-                if (!kids) box.appendChild(el('p', { class: 'small mb-0', text: 'Add the Children card first.' }));
-                else box.appendChild(segControl('Children in care', Array.from({ length: kids + 1 }, function (_, i) { return { value: i === kids ? null : i, label: i === kids ? 'All' : String(i) }; }).filter(function (o) { return o.value !== 0; }), t.children, function (v) { updateTile('childcare', { children: v }, 'Childcare updated'); }));
-                box.appendChild(numberField('cc-cost', 'Monthly cost per child (assumption)', assumption('childcareMonthlyPerChild'), '', function (v) { setAssumption('childcareMonthlyPerChild', v); }, { max: 5000 }));
+                if (!kids) {
+                    box.appendChild(el('div', { class: 'alert alert-info d-flex flex-wrap align-items-center gap-2' }, [
+                        el('span', { class: 'me-auto', text: 'Daycare needs kids. Add the Children card first.' }),
+                        el('button', { type: 'button', class: 'btn btn-sm btn-primary', onclick: function () { addTile('children'); } }, ['Add children'])
+                    ]));
+                }
+                box.appendChild(el('p', { class: 'mb-2', text: 'What kind of daycare?' }));
+                box.appendChild(optionGrid('Daycare level', 'opt-care', levelOptions('childcare', function (k) { return FP.money(careRate(k)) + ' per child/mo'; }), t.tier, function (v) { updateTile('childcare', { tier: v }, PRESETS.childcare[v].label + ' daycare'); }));
+                if (kids > 1) {
+                    box.appendChild(heading('How many kids in daycare?'));
+                    box.appendChild(segControl('Children in care', Array.from({ length: kids }, function (_, i) { return { value: i + 1 === kids ? null : i + 1, label: i + 1 === kids ? 'All ' + kids : String(i + 1) }; }), t.children, function (v) { updateTile('childcare', { children: v }, 'Childcare updated'); }));
+                }
+                box.appendChild(note('Full-time care prices vary a lot by city and age; babies cost the most. Middle is ' + FP.money(assumption('childcareMonthlyPerChild')) + ' per child (change in advanced assumptions).'));
                 break;
             case 'travel':
-                box.appendChild(numberField('travel-annual', 'Travel budget per year', t.annual, 'Default ' + FP.money(assumption('travelAnnual')), function (v) { updateTile('travel', { annual: v }, 'Travel budget updated'); }, { max: 100000 }));
+                box.appendChild(el('p', { class: 'mb-2', text: 'What kind of trips, and how many times a year?' }));
+                var trips = t.trips || { local: 0, usa: 0, cruise: 0, world: 0 };
+                var people = travelers();
+                var list = el('div', { class: 'trip-list' });
+                E.TRIP_KINDS.forEach(function (k) {
+                    var p = PRESETS.travel[k];
+                    if (!p) return;
+                    var n = trips[k] || 0;
+                    var setN = function (v) {
+                        var next = Object.assign({}, trips); next[k] = Math.max(0, Math.min(MAX_TRIPS, v));
+                        updateTile('travel', { trips: next, annual: null }, p.label + ': ' + next[k] + ' a year');
+                    };
+                    list.appendChild(el('div', { class: 'trip-card' + (n > 0 ? ' is-on' : '') }, [
+                        el('span', { class: 'opt-icon', 'aria-hidden': 'true', text: LEVEL_ICONS.travel[k] }),
+                        el('div', { class: 'trip-text' }, [
+                            el('span', { class: 'opt-title', text: p.label }),
+                            el('span', { class: 'opt-examples', text: p.examples }),
+                            el('span', { class: 'opt-cue', text: 'about ' + FP.money(p.costPerPerson) + ' per person per trip' })
+                        ]),
+                        el('div', { class: 'stepper', role: 'group', 'aria-label': p.label + ' per year' }, [
+                            el('button', { type: 'button', class: 'icon-btn', id: 'trip-' + k + '-minus', 'aria-label': 'Fewer ' + p.label.toLowerCase(), disabled: n <= 0, onclick: function () { setN(n - 1); } }, ['−']),
+                            el('span', { class: 'stepper-value', 'aria-live': 'polite', text: n + 'x/yr' }),
+                            el('button', { type: 'button', class: 'icon-btn', id: 'trip-' + k + '-plus', 'aria-label': 'More ' + p.label.toLowerCase(), disabled: n >= MAX_TRIPS, onclick: function () { setN(n + 1); } }, ['+'])
+                        ])
+                    ]));
+                });
+                box.appendChild(list);
+                var yearly = t.annual !== null ? t.annual : travelAnnual(trips);
+                box.appendChild(el('div', { class: 'trip-total' }, [
+                    el('span', { text: 'Travel budget: ' }),
+                    el('strong', { text: FP.money(yearly) + ' a year' }),
+                    el('span', { text: ' (' + FP.money(yearly / 12) + '/mo) for ' + people + ' traveler' + (people === 1 ? '' : 's') })
+                ]));
+                box.appendChild(note('Costs are typical per person and include getting there, a place to stay, food and fun. Everyone in your household travels.'));
+                break;
+            case 'roommates':
+                box.appendChild(el('p', { class: 'mb-2', text: 'How many roommates?' }));
+                box.appendChild(optionGrid('Number of roommates', 'opt-roomies', [1, 2, 3, 4].map(function (n) {
+                    return { value: n, icon: '\u{1F9CD}'.repeat(n), title: n + ' roommate' + (n > 1 ? 's' : ''), cue: perMonth(monthlyWith('roommates', { count: n })) };
+                }), t.count, function (v) { updateTile('roommates', { count: v }, v + ' roommates'); }));
+                box.appendChild(note('Rent is split evenly. Pick enough bedrooms in the Apartment card so everyone has a room.'));
                 break;
             case 'savings':
                 box.appendChild(numberField('savings-monthly', 'Save each month', t.monthly, 'Default ' + FP.money(assumption('emergencySavingsMonthly')), function (v) { updateTile('savings', { monthly: v }, 'Savings updated'); }, { max: 20000 }));
@@ -339,28 +475,51 @@
                 break;
             case 'student_debt':
                 var fromSchool = lastResult && lastResult.education.borrowed !== null ? lastResult.education.borrowed : null;
-                box.appendChild(numberField('debt-principal', 'Amount borrowed', t.principal, fromSchool !== null ? 'From your school choice: ' + FP.money(fromSchool) : 'Pick a school or enter an amount', function (v) { updateTile('student_debt', { principal: v }, 'Student debt updated'); }, { max: 1000000 }));
-                var loanSel = el('select', { class: 'form-select form-select-sm', 'aria-label': 'Loan type' });
+                var hasDegree = SCHOOL_PATHS.indexOf(state.education.pathway) >= 0;
+                box.appendChild(el('div', { class: 'need-box' }, hasDegree ? [
+                    el('div', { class: 'small', text: 'From your school choice in step 3' }),
+                    el('div', { class: 'need-amount', text: fromSchool !== null ? FP.money(fromSchool) + ' borrowed' : 'Pick a college to estimate' }),
+                    el('div', { class: 'small', text: lastResult && lastResult.education.monthlyPayment ? FP.money(lastResult.education.monthlyPayment) + '/mo for 10 years' : '' })
+                ] : [el('div', { text: 'Pick a degree path in step 3 and your student debt shows up here automatically.' })]));
+                box.appendChild(heading('Loan type'));
+                var loanSel = el('select', { class: 'form-select form-select-sm mb-2', 'aria-label': 'Loan type' });
                 [['direct_undergrad', 'Federal undergraduate loan'], ['direct_grad', 'Federal graduate loan'], ['direct_plus', 'PLUS loan']].forEach(function (o) {
                     var opt = el('option', { value: o[0], text: o[1] + (b && b.loans[o[0]] ? ' (' + b.loans[o[0]].rate + '%)' : '') }); if (state.education.loanKey === o[0]) opt.selected = true; loanSel.appendChild(opt);
                 });
                 loanSel.addEventListener('change', function () { commit(function (s) { s.education.loanKey = loanSel.value; }, 'Loan type changed'); });
                 box.appendChild(loanSel);
+                box.appendChild(numberField('debt-principal', 'Or enter the amount you expect to borrow', t.principal, fromSchool !== null ? FP.money(fromSchool) : 'Amount', function (v) { updateTile('student_debt', { principal: v }, 'Student debt updated'); }, { max: 1000000 }));
                 break;
         }
         return box;
     }
 
-    function rentTable(b, bedrooms) {
-        var key = String(bedrooms);
-        var acs = b.housing.acs.rents ? b.housing.acs.rents[key] : null;
-        var hud = b.housing.hud.areas.length ? b.housing.hud.areas[0] : null;
-        var rows = [
-            el('li', {}, ['Census ACS median (' + (b.housing.acs.period || 'n/a') + '): ', el('strong', { text: FP.money(acs, { fallback: 'not published' }) })]),
-            el('li', {}, ['HUD Fair Market Rent (' + (hud ? hud.period : 'n/a') + '): ', el('strong', { text: hud ? FP.money(hud.rents[key], { fallback: 'not published' }) : 'not available' }),
-                hud && hud.quality === 'partial' ? el('span', { class: 'text-body-secondary', text: ' — ' + hud.name + ' (part of this metro)' }) : null])
-        ];
-        return el('ul', { class: 'small list-unstyled mt-2 mb-2 rent-ref' }, rows);
+    function renderTileModal() {
+        if (!modalType) return;
+        var t = getTile(modalType);
+        var root = $('tileModal');
+        if (!t) { if (modal) modal.hide(); return; }
+        var focusedId = document.activeElement && root.contains(document.activeElement) ? document.activeElement.id : null;
+        $('tileModalTitle').textContent = TILES[t.type].icon + ' ' + TILES[t.type].label;
+        var body = $('tileModalBody');
+        body.textContent = '';
+        body.appendChild(modalBody(t));
+        var add = monthlyWith(t.type, {});
+        $('tileModalCost').textContent = add === null ? '' : (add < 0 ? 'Saves you ' + FP.money(-add) + ' a month' : 'Adds about ' + FP.money(add) + ' a month');
+        $('tileModalRemove').setAttribute('aria-label', 'Remove ' + TILES[t.type].label + ' from My Future');
+        if (focusedId && $(focusedId)) $(focusedId).focus();
+    }
+
+    function openTileModal(type) {
+        if (!hasTile(type)) return;
+        modalType = type;
+        renderTileModal();
+        if (!modal && window.bootstrap) {
+            modal = window.bootstrap.Modal.getOrCreateInstance($('tileModal'));
+            $('tileModal').addEventListener('hidden.bs.modal', function () { var t = modalType; modalType = null; if (t) focusCanvasTile(t); });
+            $('tileModalRemove').addEventListener('click', function () { var t = modalType; if (modal) modal.hide(); if (t) removeTile(t); });
+        }
+        if (modal) modal.show();
     }
 
     function setAssumption(key, value) {
@@ -378,22 +537,20 @@
         $('canvasEmpty').hidden = state.tiles.length > 0;
         state.tiles.forEach(function (t, i) {
             var meta = TILES[t.type];
-            var open = !!expanded[t.type];
-            var bodyId = 'tile-body-' + t.type;
-            var li = el('li', { class: 'active-tile' + (open ? ' is-open' : ''), draggable: 'true', dataset: { tile: t.type } }, [
+            var li = el('li', { class: 'active-tile', draggable: 'true', dataset: { tile: t.type } }, [
                 el('div', { class: 'active-tile-head' }, [
-                    el('button', { type: 'button', class: 'tile-toggle', id: 'tile-toggle-' + t.type, 'aria-expanded': String(open), 'aria-controls': bodyId,
-                        onclick: function () { expanded[t.type] = !open; renderCanvas(); var x = $('tile-toggle-' + t.type); if (x) x.focus(); } }, [
+                    el('button', { type: 'button', class: 'tile-toggle', id: 'tile-toggle-' + t.type, 'aria-haspopup': 'dialog', 'aria-label': 'Change ' + meta.label + ': ' + tileSummary(t),
+                        onclick: function () { openTileModal(t.type); } }, [
                         el('span', { class: 'tile-icon', 'aria-hidden': 'true', text: meta.icon }),
-                        el('span', { class: 'tile-text' }, [el('span', { class: 'tile-label', text: meta.label }), el('span', { class: 'tile-desc', text: tileSummary(t) })])
+                        el('span', { class: 'tile-text' }, [el('span', { class: 'tile-label', text: meta.label }), el('span', { class: 'tile-desc', text: tileSummary(t) })]),
+                        el('span', { class: 'tile-edit', 'aria-hidden': 'true', text: 'Change' })
                     ]),
                     el('div', { class: 'tile-actions' }, [
                         el('button', { type: 'button', class: 'icon-btn', 'aria-label': 'Move ' + meta.label + ' up', disabled: i === 0, onclick: function () { moveTile(t.type, -1); } }, ['↑']),
                         el('button', { type: 'button', class: 'icon-btn', 'aria-label': 'Move ' + meta.label + ' down', disabled: i === state.tiles.length - 1, onclick: function () { moveTile(t.type, 1); } }, ['↓']),
                         el('button', { type: 'button', class: 'icon-btn icon-remove', 'aria-label': 'Remove ' + meta.label, onclick: function () { removeTile(t.type); var n = document.querySelector('#palette [data-tile="' + t.type + '"] button'); if (n) n.focus(); } }, ['×'])
                     ])
-                ]),
-                el('div', { class: 'active-tile-body', id: bodyId, hidden: !open }, [open ? tileControls(t) : null])
+                ])
             ]);
             li.addEventListener('dragstart', function (e) {
                 if (e.target !== li) return;
@@ -429,7 +586,7 @@
             e.preventDefault(); canvas.classList.remove('drag-over');
             var d = readDrag(e); if (!d) return;
             var idx = dropIndex(canvas, e.clientY);
-            if (d.kind === 'tile') addTile(d.type, idx);
+            if (d.kind === 'tile') { addTile(d.type, idx); openTileModal(d.type); }
             else if (d.kind === 'active') {
                 commit(function (s) {
                     var from = s.tiles.findIndex(function (t) { return t.type === d.type; });
@@ -503,9 +660,18 @@
             s.education.years = p ? p.typicalYears : 0;
             s.education.loanKey = GRAD_PATHS.indexOf(key) >= 0 ? 'direct_grad' : 'direct_undergrad';
             if (SCHOOL_PATHS.indexOf(key) < 0) { s.education.unitid = null; s.education.cip = ''; s.education.annualNetPrice = null; }
+            syncStudentDebt(s);
         }, 'Path set to ' + (p ? p.name : key));
         $('pathwaySelect').value = key;
         renderSchoolPicker();
+    }
+
+    /** Student debt follows the degree: added with a school path, dropped without one (unless the user typed an amount). */
+    function syncStudentDebt(s) {
+        var debt = s.tiles.filter(function (t) { return t.type === 'student_debt'; })[0];
+        var degree = SCHOOL_PATHS.indexOf(s.education.pathway) >= 0;
+        if (degree && !debt) s.tiles.push(defaultTile('student_debt'));
+        if (!degree && debt && debt.principal === null) s.tiles = s.tiles.filter(function (t) { return t !== debt; });
     }
 
     function chooseCollege(inst) {
@@ -518,8 +684,8 @@
                 s.education.pathway = key;
                 s.education.years = cache.pathways && cache.pathways[key] ? cache.pathways[key].typicalYears : 4;
             }
-            if (!s.tiles.some(function (t) { return t.type === 'student_debt'; })) s.tiles.push(defaultTile('student_debt'));
-        }, inst.name + ' selected; Student debt card added');
+            syncStudentDebt(s);
+        }, inst.name + ' selected; Student debt is in My Future');
         $('collegeInput').value = inst.name;
         loadPrograms(inst.unitid);
     }
@@ -673,7 +839,7 @@
                 el('span', { class: 'path-kind', text: 'Path' }),
                 el('span', { class: 'fw-semibold', text: p ? p.name : state.education.pathway }),
                 inst ? el('span', { class: 'small d-block', text: inst.name + (prog ? ' · ' + prog.title : '') }) : null,
-                el('button', { type: 'button', class: 'btn btn-link btn-sm p-0 d-block', onclick: function () { commit(function (s) { s.education = { pathway: '', years: 0, unitid: null, cip: '', annualNetPrice: null, grantsAnnual: 0, familyAnnual: 0, loanKey: 'direct_undergrad' }; }, 'Path cleared'); $('pathwaySelect').value = ''; renderSchoolPicker(); } }, ['Clear path'])
+                el('button', { type: 'button', class: 'btn btn-link btn-sm p-0 d-block', onclick: function () { commit(function (s) { s.education = { pathway: '', years: 0, unitid: null, cip: '', annualNetPrice: null, grantsAnnual: 0, familyAnnual: 0, loanKey: 'direct_undergrad' }; syncStudentDebt(s); }, 'Path cleared'); $('pathwaySelect').value = ''; renderSchoolPicker(); } }, ['Clear path'])
             ]));
         }
         $('pathSlot').classList.toggle('has-content', !!(e0.soc || state.education.pathway));
@@ -726,7 +892,7 @@
             var cip = v.split('|')[0];
             var pr = (cache.programs[state.education.unitid] || { programs: [] }).programs.filter(function (p) { return p.cip === cip; })[0];
             if (pr && pr.pathway && SCHOOL_PATHS.indexOf(pr.pathway) >= 0 && pr.pathway !== state.education.pathway) {
-                commit(function (s) { s.education.pathway = pr.pathway; s.education.years = cache.pathways && cache.pathways[pr.pathway] ? cache.pathways[pr.pathway].typicalYears : s.education.years; }, null);
+                commit(function (s) { s.education.pathway = pr.pathway; s.education.years = cache.pathways && cache.pathways[pr.pathway] ? cache.pathways[pr.pathway].typicalYears : s.education.years; syncStudentDebt(s); }, null);
                 $('pathwaySelect').value = pr.pathway;
             }
             chooseProgram(cip, pr ? pr.title : cip, state.education.unitid);
@@ -859,6 +1025,8 @@
             var t = getTile(li.dataset.tile);
             var d = li.querySelector('.tile-desc');
             if (t && d) d.textContent = tileSummary(t);
+            var b = li.querySelector('.tile-toggle');
+            if (t && b) b.setAttribute('aria-label', 'Change ' + TILES[t.type].label + ': ' + tileSummary(t));
         });
     }
 
@@ -1015,10 +1183,19 @@
             var v4 = variant(function (s) { s.tiles = s.tiles.filter(function (t) { return t.type !== 'second_car'; }); });
             items.push({ label: 'One car instead of two:', surplus: v4.r.monthlySurplus, apply: function () { removeTile('second_car'); } });
         }
-        if (apt && apt.benchmark === 'acs') {
-            var v5 = variant(function (s) { s.tiles.filter(function (t) { return t.type === 'apartment'; })[0].benchmark = 'hud'; });
-            if (v5.r.monthlySurplus > lastResult.monthlySurplus) items.push({ label: 'Use the HUD Fair Market Rent benchmark (often lower):', surplus: v5.r.monthlySurplus, apply: function () { updateTile('apartment', { benchmark: 'hud' }, 'Rent benchmark changed'); } });
+        var houseTiers = Object.keys(PRESETS.house);
+        var houseIdx = house ? houseTiers.indexOf(house.tier) : -1;
+        if (house && house.price === null && houseIdx > 0) {
+            var smaller = houseTiers[houseIdx - 1];
+            var v5 = variant(function (s) { var h = s.tiles.filter(function (t) { return t.type === 'house'; })[0]; h.tier = smaller; h.bedrooms = PRESETS.house[smaller].bedrooms; });
+            items.push({ label: 'A ' + PRESETS.house[smaller].label.toLowerCase() + ' home instead:', surplus: v5.r.monthlySurplus, apply: function () { updateTile('house', { tier: smaller, bedrooms: PRESETS.house[smaller].bedrooms }, PRESETS.house[smaller].label + ' home'); } });
         }
+        ['car', 'second_car'].forEach(function (ct) {
+            var c = getTile(ct);
+            if (!c || c.price !== null || c.tier === 'compact' || !PRESETS.car.compact) return;
+            var v6 = variant(function (s) { s.tiles.filter(function (t) { return t.type === ct; })[0].tier = 'compact'; });
+            items.push({ label: 'A compact ' + (ct === 'car' ? 'car' : 'second car') + ' (' + PRESETS.car.compact.examples.split(',')[0] + '):', surplus: v6.r.monthlySurplus, apply: function () { updateTile(ct, { tier: 'compact' }, 'Compact car'); } });
+        });
         suggestionList('Housing and car changes (same city and career)', items, 'No housing changes to suggest. Try another city or career.');
     }
 
@@ -1290,6 +1467,7 @@
         renderCanvas();
         syncControls();
         renderPathSummary();
+        renderTileModal();
         if (current.bundle && current.bundle.metro.cbsa === state.cbsa) renderMetro(current.bundle);
     }
 

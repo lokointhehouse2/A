@@ -105,8 +105,28 @@ a { color: var(--fp-primary); }
 .icon-btn { width: 2.25rem; height: 2.25rem; border: 1px solid var(--fp-line); background: #fff; border-radius: 8px; font-weight: 700; line-height: 1; }
 .icon-btn:disabled { opacity: .35; }
 .icon-remove { color: var(--fp-minus); }
-.active-tile-body { padding: .2rem .8rem .8rem; border-top: 1px solid var(--fp-line); }
-.tile-controls { padding-top: .6rem; }
+.tile-toggle:hover { background: #f4f5ff; }
+.tile-edit { margin-left: auto; font-size: .78rem; font-weight: 700; color: var(--fp-primary); white-space: nowrap; }
+
+/* tile modal: big picture options */
+.tile-modal .modal-content { border-radius: 18px; }
+.opt-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: .6rem; }
+.opt-card { display: flex; flex-direction: column; align-items: flex-start; gap: .15rem; text-align: left; padding: .8rem .9rem; border: 2px solid var(--fp-line); border-radius: 14px; background: #fff; color: var(--fp-ink); min-height: 6rem; transition: border-color .12s ease, transform .12s ease; }
+.opt-card:hover { border-color: #b9b4f3; transform: translateY(-1px); }
+.opt-card[aria-checked="true"] { border-color: var(--fp-primary); background: #f1f0ff; box-shadow: 0 0 0 3px rgba(58, 47, 209, .15); }
+.opt-icon { font-size: 1.8rem; line-height: 1.1; }
+.opt-title { font-weight: 800; font-size: 1rem; }
+.opt-sub { font-size: .8rem; font-weight: 600; color: var(--fp-muted); }
+.opt-examples { font-size: .8rem; color: var(--fp-muted); }
+.opt-cue { margin-top: auto; padding-top: .3rem; font-size: .85rem; font-weight: 700; color: var(--fp-primary); }
+.trip-list { display: grid; gap: .6rem; }
+.trip-card { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: .8rem; padding: .7rem .9rem; border: 2px solid var(--fp-line); border-radius: 14px; }
+.trip-card.is-on { border-color: var(--fp-primary); background: #f1f0ff; }
+.trip-text { display: flex; flex-direction: column; min-width: 0; }
+.stepper { display: flex; align-items: center; gap: .35rem; }
+.stepper-value { min-width: 3.4rem; text-align: center; font-weight: 800; }
+.trip-total { margin-top: .8rem; padding: .7rem .9rem; border-radius: 12px; background: #eef0ff; }
+@media (max-width: 575.98px) { .trip-card { grid-template-columns: auto minmax(0, 1fr); } .stepper { grid-column: 1 / -1; justify-content: flex-end; } }
 .assumptions summary { font-weight: 700; cursor: pointer; }
 
 /* path slot & pick cards */

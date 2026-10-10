@@ -150,6 +150,28 @@
 
     function fmt(n) { return Math.round(n).toLocaleString('en-US'); }
 
+    /** Lifestyle level (e.g. car 'luxury') from defaults.presets; null when the tile has no level or it is unknown. */
+    function preset(defaults, group, key) {
+        var g = defaults && defaults.presets ? defaults.presets[group] : null;
+        return g && key && g[key] ? g[key] : null;
+    }
+
+    var TRIP_KINDS = ['local', 'usa', 'cruise', 'world'];
+
+    /** Yearly travel cost from trips per year x cost per person x travelers; null when the tile has no trip plan. */
+    function travelPlan(travel, defaults, travelers) {
+        if (!travel.trips || typeof travel.trips !== 'object') return null;
+        var annual = 0, parts = [];
+        TRIP_KINDS.forEach(function (k) {
+            var n = nz(travel.trips[k], 0);
+            var p = preset(defaults, 'travel', k);
+            if (!(n > 0) || !p) return;
+            annual += n * p.costPerPerson * travelers;
+            parts.push(p.label + ' x' + n);
+        });
+        return { annual: annual, detail: parts.length ? parts.join(', ') + ' per year for ' + travelers + ' traveler' + (travelers === 1 ? '' : 's') : 'No trips planned' };
+    }
+
     function benchmarkRent(apt, housing, warnings) {
         var key = String(apt.bedrooms);
         if (isNum(apt.customRent)) return { value: apt.customRent, basis: 'user', label: 'Your rent', note: '', citation: null };
@@ -341,7 +363,9 @@
         } else if (housingMode === 'own') {
             var house = tile.house;
             var hv = ref.housing && ref.housing.homeValue ? ref.housing.homeValue : null;
-            var price = isNum(house.price) ? house.price : (hv ? hv.value : null);
+            var houseLevel = preset(defaults, 'house', house.tier);
+            var houseMult = houseLevel ? houseLevel.priceMultiplier : 1;
+            var price = isNum(house.price) ? house.price : (hv ? hv.value * houseMult : null);
             var priceBasis = isNum(house.price) ? 'user' : 'sourced';
             if (!isNum(price)) {
                 complete = false;
@@ -353,7 +377,8 @@
                 var mort = amortize(loanAmount, A.mortgageRatePct, A.mortgageTermYears * 12);
                 upfront.downPayment = price * A.downPaymentPct / 100;
                 upfront.closingCosts = price * A.closingCostPct / 100;
-                var priceLabel = (priceBasis === 'sourced' ? 'Metro median home value ' : 'Home price ') + '$' + fmt(price);
+                var priceLabel = priceBasis !== 'sourced' ? 'Home price $' + fmt(price)
+                    : (houseLevel && houseMult !== 1 ? houseLevel.label + ' home ($' + fmt(price) + ', ' + houseMult + 'x metro median $' + fmt(hv.value) + ')' : 'Metro median home value $' + fmt(price));
                 lines.push(line('mortgage', 'Mortgage (principal + interest)', 'housing', mort.payment, 'assumption', priceLabel + ', ' + A.downPaymentPct + '% down, ' + A.mortgageRatePct + '% for ' + A.mortgageTermYears + ' years', ''));
                 lines.push(line('property_tax', 'Property tax', 'housing', price * A.propertyTaxPct / 100 / 12, 'assumption', A.propertyTaxPct + '% of value per year', 'Property tax rates vary by county.'));
                 lines.push(line('home_insurance', "Homeowner's insurance", 'housing', A.homeInsuranceMonthly, 'assumption', 'FuturePath assumption', ''));
@@ -369,12 +394,14 @@
         var cars = (tile.car ? 1 : 0) + (tile.second_car ? 1 : 0);
         ['car', 'second_car'].forEach(function (ct) {
             if (!tile[ct]) return;
-            var carPrice = isNum(tile[ct].price) ? tile[ct].price : A.carPrice;
+            var carLevel = preset(defaults, 'car', tile[ct].tier);
+            var carPrice = isNum(tile[ct].price) ? tile[ct].price : A.carPrice * (carLevel ? carLevel.priceMultiplier : 1);
             var carLoan = amortize(carPrice * (1 - A.carDownPaymentPct / 100), A.carAprPct, A.carTermMonths);
             var label = ct === 'car' ? 'Car' : 'Second car';
-            lines.push(line(ct + '_payment', label + ' payment', 'transportation', carLoan.payment, 'assumption', '$' + fmt(carPrice) + ' car, ' + A.carDownPaymentPct + '% down, ' + A.carAprPct + '% for ' + A.carTermMonths + ' months', ''));
-            lines.push(line(ct + '_insurance', label + ' insurance', 'transportation', A.carInsuranceMonthly, 'assumption', 'FuturePath assumption', ''));
-            lines.push(line(ct + '_running', label + ' gas and maintenance', 'transportation', A.carFuelMaintenanceMonthly, 'assumption', 'FuturePath assumption', ''));
+            var levelText = carLevel ? carLevel.label + ' ' : '';
+            lines.push(line(ct + '_payment', label + ' payment', 'transportation', carLoan.payment, 'assumption', '$' + fmt(carPrice) + ' ' + levelText.toLowerCase() + 'car, ' + A.carDownPaymentPct + '% down, ' + A.carAprPct + '% for ' + A.carTermMonths + ' months', ''));
+            lines.push(line(ct + '_insurance', label + ' insurance', 'transportation', A.carInsuranceMonthly * (carLevel ? carLevel.insuranceMultiplier : 1), 'assumption', levelText + 'FuturePath assumption', ''));
+            lines.push(line(ct + '_running', label + ' gas and maintenance', 'transportation', A.carFuelMaintenanceMonthly * (carLevel ? carLevel.runningMultiplier : 1), 'assumption', levelText + 'FuturePath assumption', ''));
         });
         if (cars === 0) lines.push(line('transit', 'Public transit', 'transportation', A.transitMonthlyPerAdult * s.adults, 'assumption', 'FuturePath assumption', ''));
 
@@ -388,7 +415,8 @@
             if (children === 0) warnings.push('Childcare needs the Children tile.');
             else {
                 var inCare = Math.min(children, isNum(tile.childcare.children) ? tile.childcare.children : children);
-                lines.push(line('childcare', 'Childcare (' + inCare + ' child' + (inCare === 1 ? '' : 'ren') + ')', 'childcare', inCare * A.childcareMonthlyPerChild, 'assumption', 'FuturePath assumption', 'Childcare prices vary a lot by city and age.'));
+                var careLevel = preset(defaults, 'childcare', tile.childcare.tier);
+                lines.push(line('childcare', 'Childcare (' + inCare + ' child' + (inCare === 1 ? '' : 'ren') + ')', 'childcare', inCare * A.childcareMonthlyPerChild * (careLevel ? careLevel.costMultiplier : 1), 'assumption', careLevel ? careLevel.label + ' care: ' + careLevel.examples.toLowerCase() : 'FuturePath assumption', 'Childcare prices vary a lot by city and age.'));
             }
         }
 
@@ -417,7 +445,12 @@
             }
         }
 
-        if (tile.travel) lines.push(line('travel', 'Travel and vacations', 'savings', (isNum(tile.travel.annual) ? tile.travel.annual : A.travelAnnual) / 12, isNum(tile.travel.annual) ? 'user' : 'assumption', '', ''));
+        if (tile.travel) {
+            var plan = isNum(tile.travel.annual) ? null : travelPlan(tile.travel, defaults, members);
+            if (isNum(tile.travel.annual)) lines.push(line('travel', 'Travel and vacations', 'savings', tile.travel.annual / 12, 'user', '', ''));
+            else if (plan) lines.push(line('travel', 'Travel and vacations', 'savings', plan.annual / 12, 'assumption', plan.detail, 'Typical trip costs per person; real prices vary by season and destination.'));
+            else lines.push(line('travel', 'Travel and vacations', 'savings', A.travelAnnual / 12, 'assumption', '', ''));
+        }
         if (tile.savings) lines.push(line('emergency_savings', 'Savings', 'savings', isNum(tile.savings.monthly) ? tile.savings.monthly : A.emergencySavingsMonthly, isNum(tile.savings.monthly) ? 'user' : 'assumption', '', ''));
 
         var monthlyCosts = 0;
@@ -469,6 +502,6 @@
 
     return {
         amortize: amortize, balanceAfter: balanceAfter, bracketTax: bracketTax, estimateTaxes: estimateTaxes,
-        compute: compute, requiredGross: requiredGross, effectiveAssumptions: effectiveAssumptions, STATUSES: STATUSES
+        compute: compute, requiredGross: requiredGross, effectiveAssumptions: effectiveAssumptions, STATUSES: STATUSES, TRIP_KINDS: TRIP_KINDS
     };
 }));
