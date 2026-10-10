@@ -1,0 +1,33 @@
+{
+    "name":"FuturePath",
+    "openBrowser":false,
+    "app":{
+        "cfengine":"lucee@6.2.7+16"
+    },
+    "jvm":{
+        "javaVersion":"openjdk21_jre_x64",
+        "heapSize":"1536",
+        "minHeapSize":"256",
+        "args":"-Duser.timezone=UTC -Dfile.encoding=UTF-8 ${JAVA_TRUSTSTORE_ARGS:}"
+    },
+    "web":{
+        "host":"127.0.0.1",
+        "http":{
+            "port":42005
+        },
+        "webroot":".",
+        "welcomeFiles":"index.cfm",
+        "directoryBrowsing":false,
+        "blockCFAdmin":true,
+        "blockSensitivePaths":true,
+        "rules":[
+            "regex('(?i)\\.(cfc|env|sql|ps1|md|yml|yaml|log|ini|csv|xlsx|xls|zip|dat)$') -> set-error(404)",
+            "regex('/\\.') -> set-error(404)",
+            "not regex('^/(assets|lucee)/') and not path('/favicon.ico') and not path('/robots.txt') -> rewrite('/index.cfm%{RELATIVE_PATH}')"
+        ]
+    },
+    "env":{
+        "LUCEE_EXTENSIONS":"7E673D15-D87C-41A6-8B5F1956528C605F"
+    },
+    "cfconfigfile":".cfconfig.json"
+}

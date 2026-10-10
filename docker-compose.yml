@@ -1,0 +1,33 @@
+# OPTIONAL development database. Any MariaDB 10.6+ server works; point .env at it instead.
+name: futurepath
+
+services:
+  mariadb:
+    image: mariadb:12.3
+    container_name: futurepath-mariadb
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?set DB_ROOT_PASSWORD in .env}
+      MARIADB_DATABASE: ${DB_NAME:-futurepath}
+      MARIADB_USER: ${DB_USER:-futurepath_app}
+      MARIADB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+      TZ: UTC
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-time-zone=+00:00
+      - --max-allowed-packet=64M
+    ports:
+      # Bound to loopback only: not reachable from other machines.
+      - "127.0.0.1:${DB_PORT:-3308}:3306"
+    volumes:
+      - futurepath_mariadb_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+volumes:
+  futurepath_mariadb_data:

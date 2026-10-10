@@ -1,0 +1,1047 @@
+{
+ "name": "dc_unmarried_two_earners",
+ "note": "Frozen reference data snapshot. Regenerate with: node tests/js/engine.test.js --generate",
+ "scenario": {
+  "timeline": {
+   "ages": [
+    18,
+    22,
+    25,
+    30,
+    40
+   ],
+   "mode": "today",
+   "startAge": 18
+  },
+  "adults": 2,
+  "filingStatus": "hoh",
+  "earners": [
+   {
+    "workFraction": 1,
+    "soc": "29-1141",
+    "customWage": null,
+    "percentile": "median"
+   },
+   {
+    "workFraction": 0.5,
+    "soc": "47-2031",
+    "customWage": null,
+    "percentile": "p25"
+   }
+  ],
+  "nycResident": false,
+  "tiles": [
+   {
+    "benchmark": "hud",
+    "customRent": null,
+    "bedrooms": 2,
+    "type": "apartment"
+   },
+   {
+    "price": null,
+    "type": "car"
+   },
+   {
+    "ageGroup": "child_2_3",
+    "count": 1,
+    "type": "children"
+   },
+   {
+    "children": null,
+    "type": "childcare"
+   }
+  ],
+  "taxYear": 2026,
+  "v": 1,
+  "cbsa": "47900",
+  "education": {
+   "cip": "",
+   "loanKey": "direct_undergrad",
+   "unitid": null,
+   "years": 2,
+   "pathway": "associate",
+   "annualNetPrice": 9000,
+   "familyAnnual": 0,
+   "grantsAnnual": 0
+  },
+  "state": "DC",
+  "assumptions": {}
+ },
+ "reference": {
+  "pathways": {
+   "work": {
+    "minimumYears": 0,
+    "typicalYears": 0,
+    "costBasis": "No tuition",
+    "licensingNotes": null,
+    "name": "Start working after high school",
+    "key": "work",
+    "type": "work",
+    "description": "Enter the workforce directly; many employers train on the job."
+   },
+   "doctoral": {
+    "minimumYears": 8,
+    "typicalYears": 10,
+    "costBasis": "Bachelor's plus doctoral study (often funded by assistantships)",
+    "licensingNotes": "College professor positions typically require a doctoral degree, and they are competitive.",
+    "name": "Doctoral degree (PhD)",
+    "key": "doctoral",
+    "type": "doctoral",
+    "description": "Research degree after a bachelor's degree; length varies widely."
+   },
+   "master": {
+    "minimumYears": 5,
+    "typicalYears": 6,
+    "costBasis": "Bachelor's plus graduate tuition",
+    "licensingNotes": null,
+    "name": "Master's degree",
+    "key": "master",
+    "type": "master",
+    "description": "One to three years of graduate study after a bachelor's degree."
+   },
+   "apprenticeship": {
+    "minimumYears": 1,
+    "typicalYears": 4,
+    "costBasis": "Usually paid by employer; apprentices earn wages",
+    "licensingNotes": "Many trades require a journeyworker license after the apprenticeship.",
+    "name": "Registered apprenticeship (earn while you learn)",
+    "key": "apprenticeship",
+    "type": "apprenticeship",
+    "description": "Paid on-the-job training plus classroom instruction, typically 1 to 6 years."
+   },
+   "certificate": {
+    "minimumYears": 0.5,
+    "typicalYears": 1,
+    "costBasis": "Program tuition (see school data)",
+    "licensingNotes": "Some occupations require a state license or exam after training.",
+    "name": "Certificate or postsecondary nondegree award",
+    "key": "certificate",
+    "type": "certificate",
+    "description": "Short career-focused programs at technical and community colleges."
+   },
+   "associate": {
+    "minimumYears": 2,
+    "typicalYears": 2,
+    "costBasis": "Tuition and fees (see school data)",
+    "licensingNotes": null,
+    "name": "Associate degree",
+    "key": "associate",
+    "type": "associate",
+    "description": "Two-year degree at a community or technical college; many students take longer."
+   },
+   "medicine": {
+    "minimumYears": 11,
+    "typicalYears": 12,
+    "costBasis": "Bachelor's plus four years of medical school; residents are paid",
+    "licensingNotes": "Physicians must complete residency (3 to 7 years) and pass licensing exams.",
+    "name": "Medical degree (MD or DO) plus residency",
+    "key": "medicine",
+    "type": "professional",
+    "description": "Pre-med bachelor's, four years of medical school, then paid residency training."
+   },
+   "bachelor": {
+    "minimumYears": 4,
+    "typicalYears": 4,
+    "costBasis": "Tuition and fees (see school data)",
+    "licensingNotes": "Teaching in public K-12 schools also requires a state teaching license.",
+    "name": "Bachelor's degree",
+    "key": "bachelor",
+    "type": "bachelor",
+    "description": "Four-year degree; many students take five or six years."
+   },
+   "professional": {
+    "minimumYears": 6,
+    "typicalYears": 7,
+    "costBasis": "Bachelor's plus professional school tuition",
+    "licensingNotes": "Most professional occupations require passing a licensing exam.",
+    "name": "Professional degree (e.g. law, pharmacy, dentistry)",
+    "key": "professional",
+    "type": "professional",
+    "description": "Degree from a professional school after (or combined with) undergraduate study."
+   },
+   "ged": {
+    "minimumYears": 0.3,
+    "typicalYears": 0.5,
+    "costBasis": "Testing fees only (varies by state)",
+    "licensingNotes": "A GED is accepted as high school equivalency by most employers and colleges.",
+    "name": "GED or high school equivalency, then work",
+    "key": "ged",
+    "type": "ged",
+    "description": "Earn a high school equivalency credential, then start working or continue training."
+   }
+  },
+  "food": {
+   "moderate": {
+    "female_19_50": 336.1,
+    "child_2_3": 207.1,
+    "child_1": 185.8,
+    "child_6_8": 304.5,
+    "child_9_11": 349.5,
+    "male_19_50": 398.1,
+    "child_4_5": 221.4
+   },
+   "liberal": {
+    "female_19_50": 428.8,
+    "child_2_3": 252.3,
+    "child_1": 226,
+    "child_6_8": 356.3,
+    "child_9_11": 407.4,
+    "male_19_50": 486.2,
+    "child_4_5": 267.6
+   },
+   "sourceUrl": "https://www.fns.usda.gov/cnpp/usda-food-plans-cost-food-monthly-reports",
+   "low": {
+    "female_19_50": 275.7,
+    "child_2_3": 173.5,
+    "child_1": 165.1,
+    "child_6_8": 262,
+    "child_9_11": 270.9,
+    "male_19_50": 317.2,
+    "child_4_5": 178.8
+   },
+   "period": "2026-08"
+  },
+  "occupations": {
+   "29-1141": {
+    "entryEducation": "Bachelor's degree",
+    "title": "Registered Nurses"
+   },
+   "47-2031": {
+    "entryEducation": "High school diploma or equivalent",
+    "title": "Carpenters"
+   }
+  },
+  "dataYears": {
+   "rentHud": null,
+   "food": "2026-08",
+   "rentAcs": "2020-2024 ACS 5-year",
+   "taxYear": 2026,
+   "homeValue": "2020-2024 ACS 5-year",
+   "wages": 2025
+  },
+  "loans": {
+   "direct_plus": {
+    "validTo": "2027-06-30",
+    "validFrom": "2026-07-01",
+    "months": 120,
+    "sourceUrl": "https://edfinancial.studentaid.gov/interest-rates-for-federal-student-loans",
+    "rate": 9.07,
+    "description": "Direct PLUS Loan, parents and graduate/professional students (fixed rate, 10-year standard repayment)"
+   },
+   "direct_grad": {
+    "validTo": "2027-06-30",
+    "validFrom": "2026-07-01",
+    "months": 120,
+    "sourceUrl": "https://edfinancial.studentaid.gov/interest-rates-for-federal-student-loans",
+    "rate": 8.07,
+    "description": "Direct Unsubsidized Loan, graduate or professional (fixed rate, 10-year standard repayment)"
+   },
+   "direct_undergrad": {
+    "validTo": "2027-06-30",
+    "validFrom": "2026-07-01",
+    "months": 120,
+    "sourceUrl": "https://edfinancial.studentaid.gov/interest-rates-for-federal-student-loans",
+    "rate": 6.52,
+    "description": "Direct Subsidized / Unsubsidized Loan, undergraduate (fixed rate, 10-year standard repayment)"
+   }
+  },
+  "wages": {
+   "29-1141": {
+    "message": "",
+    "precision": {
+     "meanPrse": 0.5,
+     "employmentPrse": 1.5
+    },
+    "hourly": {
+     "mean": 50.28,
+     "median": 49.38
+    },
+    "year": 2025,
+    "areaCode": "47900",
+    "status": "available",
+    "flags": {
+     "annualOnly": false,
+     "topcoded": [],
+     "suppressed": [],
+     "hourlyOnly": false
+    },
+    "areaLevel": "metro",
+    "employment": 46830,
+    "annual": {
+     "mean": 104590,
+     "median": 102710,
+     "p90": 132900,
+     "p10": 80750,
+     "p25": 84610,
+     "p75": 119620
+    }
+   },
+   "47-2031": {
+    "message": "",
+    "precision": {
+     "meanPrse": 3.5,
+     "employmentPrse": 5.3
+    },
+    "hourly": {
+     "mean": 32.11,
+     "median": 29.23
+    },
+    "year": 2025,
+    "areaCode": "47900",
+    "status": "available",
+    "flags": {
+     "annualOnly": false,
+     "topcoded": [],
+     "suppressed": [],
+     "hourlyOnly": false
+    },
+    "areaLevel": "metro",
+    "employment": 13280,
+    "annual": {
+     "mean": 66790,
+     "median": 60800,
+     "p90": 90590,
+     "p10": 47150,
+     "p25": 55380,
+     "p75": 73970
+    }
+   }
+  },
+  "metro": {
+   "primaryState": "DC",
+   "states": [
+    {
+     "code": "DC",
+     "name": "District of Columbia",
+     "fips": "11"
+    },
+    {
+     "code": "MD",
+     "name": "Maryland",
+     "fips": "24"
+    },
+    {
+     "code": "VA",
+     "name": "Virginia",
+     "fips": "51"
+    },
+    {
+     "code": "WV",
+     "name": "West Virginia",
+     "fips": "54"
+    }
+   ],
+   "sourceYear": 2025,
+   "shortName": "Washington",
+   "cbsa": "47900",
+   "name": "Washington-Arlington-Alexandria, DC-VA-MD-WV",
+   "type": "MSA",
+   "hasNycOption": false
+  },
+  "taxPacks": {
+   "federal": {
+    "childTaxCredit": {
+     "phaseoutStart": {
+      "single": 200000,
+      "hoh": 200000,
+      "mfj": 400000
+     },
+     "phaseoutPerThousand": 50,
+     "refundableRate": 0.15,
+     "refundableEarnedIncomeFloor": 2500,
+     "refundableMaxPerChild": 1700,
+     "amountPerChild": 2200
+    },
+    "socialSecurity": {
+     "wageBase": 184500,
+     "rate": 0.062
+    },
+    "sources": [
+     {
+      "url": "https://www.irs.gov/taxtopics/tc560",
+      "name": "Rev. Proc. 2025-32 (2026 inflation adjustments incl. OBBBA amendments)"
+     },
+     {
+      "url": "https://www.ssa.gov/oact/cola/cbb.html",
+      "name": "Social Security contribution and benefit base"
+     }
+    ],
+    "additionalMedicare": {
+     "hoh": {
+      "threshold": 200000,
+      "rate": 0.009
+     },
+     "mfj": {
+      "threshold": 250000,
+      "rate": 0.009
+     },
+     "single": {
+      "threshold": 200000,
+      "rate": 0.009
+     }
+    },
+    "brackets": {
+     "hoh": [
+      {
+       "lower": 0,
+       "rate": 0.1,
+       "upper": 17700
+      },
+      {
+       "lower": 17700,
+       "rate": 0.12,
+       "upper": 67450
+      },
+      {
+       "lower": 67450,
+       "rate": 0.22,
+       "upper": 105700
+      },
+      {
+       "lower": 105700,
+       "rate": 0.24,
+       "upper": 201750
+      },
+      {
+       "lower": 201750,
+       "rate": 0.32,
+       "upper": 256200
+      },
+      {
+       "lower": 256200,
+       "rate": 0.35,
+       "upper": 640600
+      },
+      {
+       "lower": 640600,
+       "rate": 0.37,
+       "upper": null
+      }
+     ],
+     "mfj": [
+      {
+       "lower": 0,
+       "rate": 0.1,
+       "upper": 24800
+      },
+      {
+       "lower": 24800,
+       "rate": 0.12,
+       "upper": 100800
+      },
+      {
+       "lower": 100800,
+       "rate": 0.22,
+       "upper": 211400
+      },
+      {
+       "lower": 211400,
+       "rate": 0.24,
+       "upper": 403550
+      },
+      {
+       "lower": 403550,
+       "rate": 0.32,
+       "upper": 512450
+      },
+      {
+       "lower": 512450,
+       "rate": 0.35,
+       "upper": 768700
+      },
+      {
+       "lower": 768700,
+       "rate": 0.37,
+       "upper": null
+      }
+     ],
+     "single": [
+      {
+       "lower": 0,
+       "rate": 0.1,
+       "upper": 12400
+      },
+      {
+       "lower": 12400,
+       "rate": 0.12,
+       "upper": 50400
+      },
+      {
+       "lower": 50400,
+       "rate": 0.22,
+       "upper": 105700
+      },
+      {
+       "lower": 105700,
+       "rate": 0.24,
+       "upper": 201775
+      },
+      {
+       "lower": 201775,
+       "rate": 0.32,
+       "upper": 256225
+      },
+      {
+       "lower": 256225,
+       "rate": 0.35,
+       "upper": 640600
+      },
+      {
+       "lower": 640600,
+       "rate": 0.37,
+       "upper": null
+      }
+     ]
+    },
+    "taxYear": 2026,
+    "standardDeduction": {
+     "hoh": 24150,
+     "mfj": 32200,
+     "single": 16100
+    },
+    "noIncomeTax": false,
+    "medicare": {
+     "rate": 0.0145
+    },
+    "requestedYear": 2026,
+    "jurisdiction": "US"
+   },
+   "local": null,
+   "state": {
+    "childTaxCredit": null,
+    "socialSecurity": null,
+    "sources": [
+     {
+      "url": "https://otr.cfo.dc.gov/page/dc-individual-and-fiduciary-income-tax-rates",
+      "name": "DC individual income tax rates and standard deduction"
+     }
+    ],
+    "additionalMedicare": {},
+    "brackets": {
+     "hoh": [
+      {
+       "lower": 0,
+       "rate": 0.04,
+       "upper": 10000
+      },
+      {
+       "lower": 10000,
+       "rate": 0.06,
+       "upper": 40000
+      },
+      {
+       "lower": 40000,
+       "rate": 0.065,
+       "upper": 60000
+      },
+      {
+       "lower": 60000,
+       "rate": 0.085,
+       "upper": 250000
+      },
+      {
+       "lower": 250000,
+       "rate": 0.0925,
+       "upper": 500000
+      },
+      {
+       "lower": 500000,
+       "rate": 0.0975,
+       "upper": 1000000
+      },
+      {
+       "lower": 1000000,
+       "rate": 0.1075,
+       "upper": null
+      }
+     ],
+     "mfj": [
+      {
+       "lower": 0,
+       "rate": 0.04,
+       "upper": 10000
+      },
+      {
+       "lower": 10000,
+       "rate": 0.06,
+       "upper": 40000
+      },
+      {
+       "lower": 40000,
+       "rate": 0.065,
+       "upper": 60000
+      },
+      {
+       "lower": 60000,
+       "rate": 0.085,
+       "upper": 250000
+      },
+      {
+       "lower": 250000,
+       "rate": 0.0925,
+       "upper": 500000
+      },
+      {
+       "lower": 500000,
+       "rate": 0.0975,
+       "upper": 1000000
+      },
+      {
+       "lower": 1000000,
+       "rate": 0.1075,
+       "upper": null
+      }
+     ],
+     "single": [
+      {
+       "lower": 0,
+       "rate": 0.04,
+       "upper": 10000
+      },
+      {
+       "lower": 10000,
+       "rate": 0.06,
+       "upper": 40000
+      },
+      {
+       "lower": 40000,
+       "rate": 0.065,
+       "upper": 60000
+      },
+      {
+       "lower": 60000,
+       "rate": 0.085,
+       "upper": 250000
+      },
+      {
+       "lower": 250000,
+       "rate": 0.0925,
+       "upper": 500000
+      },
+      {
+       "lower": 500000,
+       "rate": 0.0975,
+       "upper": 1000000
+      },
+      {
+       "lower": 1000000,
+       "rate": 0.1075,
+       "upper": null
+      }
+     ]
+    },
+    "taxYear": 2025,
+    "standardDeduction": {
+     "hoh": 22500,
+     "mfj": 30000,
+     "single": 15000
+    },
+    "noIncomeTax": false,
+    "medicare": null,
+    "requestedYear": 2026,
+    "jurisdiction": "DC"
+   }
+  },
+  "housing": {
+   "homeValue": {
+    "moe": 2374,
+    "sourceUrl": "https://www.census.gov/programs-surveys/acs/data/summary-file.html",
+    "year": 2024,
+    "period": "2020-2024 ACS 5-year",
+    "value": 579900,
+    "label": "Census ACS median home value",
+    "note": "Owners' estimate of their home's value, 2020-2024 ACS 5-year. Homes for sale today may cost more or less."
+   },
+   "cbsa": "47900",
+   "acs": {
+    "moe": {
+     "0": 18,
+     "1": 12,
+     "2": 17,
+     "3": 20,
+     "4": 47,
+     "5+": 123,
+     "all": 11
+    },
+    "available": true,
+    "sourceUrl": "https://www.census.gov/programs-surveys/acs/data/summary-file.html",
+    "year": 2024,
+    "rents": {
+     "0": 1751,
+     "1": 1839,
+     "2": 2054,
+     "3": 2375,
+     "4": 2864,
+     "5+": 3256,
+     "all": 2027
+    },
+    "period": "2020-2024 ACS 5-year",
+    "label": "Census ACS median gross rent",
+    "note": "Median monthly gross rent (rent plus utilities) paid by renter households in this metro area. A survey estimate for 2020-2024 ACS 5-year, not today's listing prices."
+   },
+   "hud": {
+    "sourceUrl": "https://www.huduser.gov/portal/datasets/fmr.html",
+    "label": "HUD Fair Market Rent",
+    "areas": [],
+    "note": "A HUD policy benchmark (generally the 40th percentile of gross rents for standard-quality units), not a median and not current listings."
+   }
+  },
+  "stateCode": "DC",
+  "calculationVersion": "2026.1",
+  "institution": null,
+  "nationalWages": {
+   "29-1141": {
+    "message": "",
+    "precision": {
+     "meanPrse": 0.2,
+     "employmentPrse": 0.3
+    },
+    "hourly": {
+     "mean": 48.76,
+     "median": 46.9
+    },
+    "year": 2025,
+    "areaCode": "99",
+    "status": "available",
+    "flags": {
+     "annualOnly": false,
+     "topcoded": [],
+     "suppressed": [],
+     "hourlyOnly": false
+    },
+    "areaLevel": "national",
+    "employment": 3379720,
+    "annual": {
+     "mean": 101420,
+     "median": 97550,
+     "p90": 137470,
+     "p10": 68940,
+     "p25": 80330,
+     "p75": 112350
+    }
+   },
+   "47-2031": {
+    "message": "",
+    "precision": {
+     "meanPrse": 0.4,
+     "employmentPrse": 0.9
+    },
+    "hourly": {
+     "mean": 31.55,
+     "median": 29.12
+    },
+    "year": 2025,
+    "areaCode": "99",
+    "status": "available",
+    "flags": {
+     "annualOnly": false,
+     "topcoded": [],
+     "suppressed": [],
+     "hourlyOnly": false
+    },
+    "areaLevel": "national",
+    "employment": 670090,
+    "annual": {
+     "mean": 65630,
+     "median": 60580,
+     "p90": 99910,
+     "p10": 40410,
+     "p25": 48510,
+     "p75": 76830
+    }
+   }
+  },
+  "assumptions": {
+   "version": "2026.1",
+   "note": "FuturePath editable default assumptions. These are illustrative teaching defaults for categories where no locality-level public dataset is used. Every one can be changed in the Assumptions drawer and is labeled 'assumption' in results.",
+   "items": {
+    "diningOutMonthlyPerAdult": {
+     "value": 120,
+     "label": "Eating out (per adult)",
+     "unit": "USD/month",
+     "min": 0,
+     "max": 2000
+    },
+    "phoneInternetMonthly": {
+     "value": 130,
+     "label": "Phone and internet",
+     "unit": "USD/month",
+     "min": 0,
+     "max": 1000
+    },
+    "healthcareMonthlyPerAdult": {
+     "value": 200,
+     "label": "Health insurance share + out-of-pocket (per adult)",
+     "unit": "USD/month",
+     "min": 0,
+     "max": 3000,
+     "note": "Employee share of employer premiums plus typical out-of-pocket costs; varies widely by employer and plan."
+    },
+    "healthcareMonthlyPerChild": {
+     "value": 100,
+     "label": "Health costs (per child)",
+     "unit": "USD/month",
+     "min": 0,
+     "max": 2000
+    },
+    "otherMonthlyPerPerson": {
+     "value": 100,
+     "label": "Clothing, personal care, household items (per person)",
+     "unit": "USD/month",
+     "min": 0,
+     "max": 2000
+    },
+    "transitMonthlyPerAdult": {
+     "value": 90,
+     "label": "Public transit (per adult, when no car)",
+     "unit": "USD/month",
+     "min": 0,
+     "max": 500
+    },
+    "carPrice": {
+     "value": 28000,
+     "label": "Car price",
+     "unit": "USD",
+     "min": 0,
+     "max": 200000
+    },
+    "carDownPaymentPct": {
+     "value": 10,
+     "label": "Car down payment",
+     "unit": "percent",
+     "min": 0,
+     "max": 100
+    },
+    "carAprPct": {
+     "value": 7.5,
+     "label": "Car loan interest rate",
+     "unit": "percent APR",
+     "min": 0,
+     "max": 30
+    },
+    "carTermMonths": {
+     "value": 60,
+     "label": "Car loan length",
+     "unit": "months",
+     "min": 12,
+     "max": 96
+    },
+    "carInsuranceMonthly": {
+     "value": 180,
+     "label": "Car insurance (per car)",
+     "unit": "USD/month",
+     "min": 0,
+     "max": 1000
+    },
+    "carFuelMaintenanceMonthly": {
+     "value": 200,
+     "label": "Gas and maintenance (per car)",
+     "unit": "USD/month",
+     "min": 0,
+     "max": 1000
+    },
+    "childcareMonthlyPerChild": {
+     "value": 1100,
+     "label": "Childcare (per child in care)",
+     "unit": "USD/month",
+     "min": 0,
+     "max": 5000,
+     "note": "Full-time childcare prices vary a lot by city, age and type of care."
+    },
+    "travelAnnual": {
+     "value": 2000,
+     "label": "Travel and vacations",
+     "unit": "USD/year",
+     "min": 0,
+     "max": 50000
+    },
+    "emergencySavingsMonthly": {
+     "value": 200,
+     "label": "Emergency savings",
+     "unit": "USD/month",
+     "min": 0,
+     "max": 10000
+    },
+    "retirementPct": {
+     "value": 5,
+     "label": "Pre-tax retirement contribution",
+     "unit": "percent of pay",
+     "min": 0,
+     "max": 30
+    },
+    "renterInsuranceMonthly": {
+     "value": 15,
+     "label": "Renter's insurance",
+     "unit": "USD/month",
+     "min": 0,
+     "max": 200
+    },
+    "mortgageRatePct": {
+     "value": 6.5,
+     "label": "Mortgage interest rate",
+     "unit": "percent APR",
+     "min": 0,
+     "max": 20
+    },
+    "downPaymentPct": {
+     "value": 10,
+     "label": "Home down payment",
+     "unit": "percent",
+     "min": 0,
+     "max": 100
+    },
+    "mortgageTermYears": {
+     "value": 30,
+     "label": "Mortgage length",
+     "unit": "years",
+     "min": 5,
+     "max": 40
+    },
+    "propertyTaxPct": {
+     "value": 1,
+     "label": "Property tax",
+     "unit": "percent of value per year",
+     "min": 0,
+     "max": 5,
+     "note": "Property tax rates differ by county and city."
+    },
+    "homeInsuranceMonthly": {
+     "value": 150,
+     "label": "Homeowner's insurance",
+     "unit": "USD/month",
+     "min": 0,
+     "max": 2000
+    },
+    "maintenancePct": {
+     "value": 1,
+     "label": "Home maintenance",
+     "unit": "percent of value per year",
+     "min": 0,
+     "max": 5
+    },
+    "pmiPct": {
+     "value": 0.5,
+     "label": "Mortgage insurance (down payment under 20%)",
+     "unit": "percent of loan per year",
+     "min": 0,
+     "max": 2
+    },
+    "ownerUtilitiesMonthly": {
+     "value": 250,
+     "label": "Utilities for homeowners",
+     "unit": "USD/month",
+     "min": 0,
+     "max": 2000,
+     "note": "Renters' benchmarks are gross rents that already include utilities."
+    },
+    "hoaMonthly": {
+     "value": 0,
+     "label": "HOA fees",
+     "unit": "USD/month",
+     "min": 0,
+     "max": 3000
+    },
+    "closingCostPct": {
+     "value": 3,
+     "label": "Closing costs (one-time)",
+     "unit": "percent of price",
+     "min": 0,
+     "max": 10
+    },
+    "wageGrowthPct": {
+     "value": 0,
+     "label": "Yearly raise above inflation (projection mode)",
+     "unit": "percent/year",
+     "min": -5,
+     "max": 15
+    },
+    "inflationPct": {
+     "value": 0,
+     "label": "Price inflation (projection mode)",
+     "unit": "percent/year",
+     "min": 0,
+     "max": 15
+    }
+   }
+  },
+  "wageDefinitions": {
+   "mean": "Average (mean) annual wage of all workers in the occupation in this area.",
+   "median": "Half of workers earn more than this and half earn less.",
+   "p90": "90% of workers earn less than this.",
+   "annualOnly": "Only annual wages are published for this occupation (for example, teachers who work a school year).",
+   "p10": "10% of workers earn less than this (90% earn more).",
+   "percentileCaveat": "Percentiles show how pay is spread across current workers. They are not a career ladder or a measure of years of experience.",
+   "p25": "25% of workers earn less than this.",
+   "hourlyOnly": "Only hourly wages are published for this occupation, so no annual figure is available.",
+   "p75": "75% of workers earn less than this.",
+   "topCode": "Wages at or above $239,200 per year ($115/hour) are not published as exact figures (shown as '≥ $239,200')."
+  }
+ },
+ "expected": {
+  "complete": true,
+  "grossAnnual": 130400,
+  "taxesTotal": 23110.2025,
+  "federalIncomeTax": 7874.94,
+  "stateIncomeTax": 5259.6625,
+  "localIncomeTax": 0,
+  "takeHomeMonthly": 8397.483125,
+  "monthlyCosts": 6212.3213046097135,
+  "monthlySurplus": 2185.161820390287,
+  "lines": {
+   "rent": 2054,
+   "renters_insurance": 15,
+   "car_payment": 504.95630460971284,
+   "car_insurance": 180,
+   "car_running": 200,
+   "food": 988.3650000000001,
+   "dining_out": 240,
+   "childcare": 1100,
+   "healthcare": 500,
+   "phone_internet": 130,
+   "other": 300
+  },
+  "borrowed": 18000,
+  "timeline": [
+   {
+    "age": 18,
+    "wage": 0,
+    "takeHome": 0,
+    "cumulativeSurplus": 0,
+    "debtBalance": 9000
+   },
+   {
+    "age": 22,
+    "wage": 130400,
+    "takeHome": 100769.7975,
+    "cumulativeSurplus": 78665.82553405034,
+    "debtBalance": 18000
+   },
+   {
+    "age": 25,
+    "wage": 130400,
+    "takeHome": 100769.7975,
+    "cumulativeSurplus": 157331.65106810065,
+    "debtBalance": 18000
+   },
+   {
+    "age": 30,
+    "wage": 130400,
+    "takeHome": 100769.7975,
+    "cumulativeSurplus": 288441.3602915178,
+    "debtBalance": 18000
+   },
+   {
+    "age": 40,
+    "wage": 130400,
+    "takeHome": 100769.7975,
+    "cumulativeSurplus": 550660.7787383522,
+    "debtBalance": 18000
+   }
+  ],
+  "earnerWages": [
+   102710,
+   55380
+  ],
+  "requiredEarner1Gross": 63855
+ }
+}

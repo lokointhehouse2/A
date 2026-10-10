@@ -1,0 +1,10 @@
+.env
+/storage/imports/raw/*
+/storage/imports/work/*
+/storage/logs/*
+!/storage/**/.gitkeep
+/testbox/
+/WEB-INF/
+/lucee-server/
+.DS_Store
+Thumbs.db
