@@ -1,6 +1,6 @@
 /**
  * GET  /api/v1/reference/bundle?cbsa=&socs=&state=&nyc=&unitid=   reference data for client-side recalculation
- * POST /api/v1/simulations/calculate        { scenario }                     authoritative budget calculation
+ * POST /api/v1/simulations/calculate        { scenario }                     authoritative budget calculation + result.projection (age timeline)
  * POST /api/v1/simulations/reverse-careers  { scenario, options }            required pay + matching careers
  * POST /api/v1/simulations/compare          { scenarios:[...] } (max 3)       side-by-side results
  * POST /api/v1/scenarios                    { scenario, title }               save config for a share link
@@ -25,7 +25,9 @@ component extends="controllers.BaseController" {
     public struct function calculate( required struct rc ) {
         var scenario = variables.b.simulator.normalize( requireScenario( arguments.rc.body ) );
         var ref = refFor( scenario );
-        return ok( { scenario: scenario, result: variables.b.simulator.compute( scenario, ref ) } );
+        var result = variables.b.simulator.compute( scenario, ref );
+        result.projection = variables.b.goals.evaluate( scenario, ref );
+        return ok( { scenario: scenario, result: result } );
     }
 
     public struct function reverseCareers( required struct rc ) {

@@ -1,4 +1,4 @@
-<cfset vm.scripts = [ "js/engine.js", "js/builder.js" ]>
+<cfset vm.scripts = [ "js/engine.js", "js/projection.js", "js/builder.js" ]>
 <cfoutput>
 <script type="application/json" id="fp-boot">#h.jsonData( {
     start: vm.start,
@@ -175,36 +175,75 @@
             </section>
         </div>
 
-        <!-- ============ RIGHT: live budget ============ -->
+        <!-- ============ RIGHT: compact summary (SimpleBudgetSummary) ============ -->
         <div class="col-12 col-xl-4 order-3">
             <section class="panel budget-panel" aria-labelledby="budgetHeading" id="budgetPanel">
                 <div class="d-flex align-items-center justify-content-between">
-                    <h2 id="budgetHeading" class="panel-title mb-0"><span class="step">4</span> Your monthly budget</h2>
+                    <h2 id="budgetHeading" class="panel-title mb-0"><span class="step">4</span> Can this future work?</h2>
                     <span class="badge text-bg-light" id="staleBadge" hidden>Updating...</span>
                 </div>
                 <div id="budgetSummary" class="mt-3" aria-live="polite">
                     <div class="skeleton"></div><div class="skeleton"></div><div class="skeleton short"></div>
                 </div>
-                <div id="suggestions" class="mt-3"></div>
-                <details class="mt-3" id="breakdownDetails" open>
-                    <summary class="fw-semibold">Where the money goes</summary>
-                    <div id="breakdown" class="mt-2"></div>
-                </details>
-                <details class="mt-2" id="educationDetails">
-                    <summary class="fw-semibold">School investment</summary>
-                    <div id="educationPanel" class="mt-2"></div>
-                </details>
-                <details class="mt-2" id="timelineDetails">
-                    <summary class="fw-semibold">Timeline</summary>
-                    <div id="timelinePanel" class="mt-2"></div>
-                </details>
-                <details class="mt-2" id="sourcesDetails">
-                    <summary class="fw-semibold">Sources &amp; assumptions</summary>
-                    <div id="sourcesPanel" class="mt-2 small"></div>
-                </details>
             </section>
         </div>
     </div>
+
+    <!-- ============ Your Future at a Glance (FutureAgeTimeline, AgeDetailPanel, GoalMilestones, RequestedVsProjected) ============ -->
+    <section class="panel mt-3 fp-results" aria-labelledby="futureHeading" id="futurePanel">
+        <div class="d-flex flex-wrap align-items-baseline gap-2">
+            <h2 id="futureHeading" class="panel-title mb-0 me-auto">Your Future at a Glance</h2>
+            <span class="illustrative-label">Illustrative projection &middot; Based on your selections and editable assumptions</span>
+        </div>
+        <p class="small text-body-secondary mt-1 mb-2" id="horizonNote"></p>
+        <div class="age-selector" role="radiogroup" aria-label="Choose an age to see" id="ageButtons"></div>
+        <div class="age-scroller" id="ageScroller" tabindex="-1">
+            <ol class="age-cards" id="ageCards" aria-label="Your life at ages 20 to 70"></ol>
+            <div class="milestone-track" id="milestoneTrack" aria-hidden="true"></div>
+        </div>
+        <p class="swipe-hint small text-body-secondary" aria-hidden="true">Swipe for more ages &rarr;</p>
+        <div class="age-detail mt-3" id="ageDetail" aria-live="polite"></div>
+        <details class="mt-2" id="textTimelineDetails">
+            <summary class="small">Text version of the timeline</summary>
+            <ol class="small mt-2 mb-0" id="textTimeline"></ol>
+        </details>
+
+        <h3 class="h6 mt-4 mb-2" id="goalsHeading">Your goals</h3>
+        <div id="goalsList" aria-labelledby="goalsHeading"></div>
+
+        <div id="alternativePanel" class="mt-4"></div>
+
+        <div class="future-actions mt-4" role="group" aria-label="What would you like to do?">
+            <button type="button" class="btn btn-primary" data-action="adjust-lifestyle" aria-controls="actionResults">Adjust my lifestyle</button>
+            <button type="button" class="btn btn-outline-primary" data-action="reverse">Compare careers</button>
+            <button type="button" class="btn btn-outline-primary" data-action="goal-dates" aria-controls="goalDatesPanel" aria-expanded="false">Change my goal dates</button>
+        </div>
+        <div id="actionResults" class="mt-2" aria-live="polite"></div>
+        <div id="goalDatesPanel" class="goal-dates mt-3" hidden></div>
+
+        <details class="mt-4" id="numbersDetails">
+            <summary class="fw-semibold">See the numbers</summary>
+            <div class="row g-3 mt-1">
+                <div class="col-12 col-lg-6">
+                    <h3 class="h6">Monthly budget with every card (today)</h3>
+                    <div id="budgetNumbers"></div>
+                    <div id="breakdown" class="mt-2"></div>
+                </div>
+                <div class="col-12 col-lg-6">
+                    <h3 class="h6">School investment</h3>
+                    <div id="educationPanel"></div>
+                </div>
+                <div class="col-12">
+                    <h3 class="h6">Year by year</h3>
+                    <div id="timelinePanel"></div>
+                </div>
+            </div>
+        </details>
+        <details class="mt-2" id="sourcesDetails">
+            <summary class="fw-semibold">Sources &amp; assumptions</summary>
+            <div id="sourcesPanel" class="mt-2 small"></div>
+        </details>
+    </section>
 
     <!-- ============ Reverse planning ============ -->
     <section class="panel mt-3" aria-labelledby="reverseHeading" id="reversePanel">
@@ -268,8 +307,9 @@
 </div>
 
 <div class="mobile-budget-bar no-print" id="mobileBar" aria-hidden="true">
+    <span>At <strong id="mbAge">—</strong></span>
     <span>Take-home <strong id="mbTake">—</strong></span>
-    <span>Costs <strong id="mbCost">—</strong></span>
+    <span>Spending <strong id="mbCost">—</strong></span>
     <span id="mbGap">—</span>
 </div>
 </cfoutput>

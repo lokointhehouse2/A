@@ -8,9 +8,9 @@
  */
 (function (window, document) {
     'use strict';
-    var FP = window.FP, E = window.FPEngine;
+    var FP = window.FP, E = window.FPEngine, P = window.FPProjection;
     var bootEl = document.getElementById('fp-boot');
-    if (!bootEl || !FP || !E) return;
+    if (!bootEl || !FP || !E || !P) return;
     var BOOT = JSON.parse(bootEl.textContent);
     var DEF = BOOT.assumptions;
     var $ = function (id) { return document.getElementById(id); };
@@ -65,15 +65,41 @@
             tiles: [defaultTile('apartment')],
             education: { pathway: '', years: 0, unitid: null, cip: '', annualNetPrice: null, grantsAnnual: 0, familyAnnual: 0, loanKey: 'direct_undergrad' },
             assumptions: {},
-            timeline: { startAge: 18, mode: 'today', ages: [18, 22, 25, 30, 40] }
+            timeline: { startAge: 18, mode: 'today', ages: [18, 22, 25, 30, 40] },
+            plan: JSON.parse(JSON.stringify(P.PLAN_DEFAULTS))
         };
+    }
+
+    function num(v, lo, hi, def) { return typeof v === 'number' && isFinite(v) && v >= lo && v <= hi ? v : def; }
+    function wholeNum(v, lo, hi, def) { var n = num(v, lo, hi, def); return n === null ? null : Math.round(n); }
+
+    /** Timeline plan from a link, storage or an older saved scenario; missing fields get the documented defaults. */
+    function sanitizePlan(raw) {
+        var p = JSON.parse(JSON.stringify(P.PLAN_DEFAULTS));
+        if (!raw || typeof raw !== 'object') return p;
+        p.endAge = wholeNum(raw.endAge, 60, 90, 70);
+        p.planningAge = wholeNum(raw.planningAge, p.endAge, 105, Math.max(95, p.endAge));
+        ['startingCash', 'startingInvestments', 'startingDebt'].forEach(function (k) { p[k] = num(raw[k], 0, 10000000, 0); });
+        p.startingDebtRatePct = num(raw.startingDebtRatePct, 0, 30, 7);
+        ['trainingSupportMonthly', 'studyIncomeMonthly', 'retirementIncomeMonthly'].forEach(function (k) { p[k] = num(raw[k], 0, 20000, 0); });
+        p.firstChildAge = wholeNum(raw.firstChildAge, 16, 60, 30);
+        p.childSpacingYears = wholeNum(raw.childSpacingYears, 1, 10, 2);
+        p.childcareYears = wholeNum(raw.childcareYears, 0, 13, 5);
+        p.secondEarnerAge = wholeNum(raw.secondEarnerAge, 14, 80, null);
+        var g = raw.goals && typeof raw.goals === 'object' ? raw.goals : {};
+        p.goals.house = wholeNum(g.house, 14, 90, 30);
+        p.goals.car = wholeNum(g.car, 14, 90, null);
+        p.goals.travel = wholeNum(g.travel, 14, 90, null);
+        p.goals.savings = wholeNum(g.savings, 14, 90, 30);
+        p.goals.savingsTarget = num(g.savingsTarget, 0, 10000000, 10000);
+        p.goals.retirement = wholeNum(g.retirement, 40, 90, 67);
+        return p;
     }
 
     /** Defensive client-side clean-up of a scenario from a link or storage (the server re-validates). */
     function sanitize(raw) {
         var d = defaultScenario();
         if (!raw || typeof raw !== 'object') return d;
-        var num = function (v, lo, hi, def) { return typeof v === 'number' && isFinite(v) && v >= lo && v <= hi ? v : def; };
         var s = d;
         if (/^\d{5}$/.test(raw.cbsa || '')) s.cbsa = raw.cbsa;
         if (/^[A-Z]{2}$/.test(raw.state || '')) s.state = raw.state;
@@ -122,6 +148,8 @@
             });
         }
         if (raw.timeline && raw.timeline.mode === 'projected') s.timeline.mode = 'projected';
+        if (raw.timeline) s.timeline.startAge = wholeNum(raw.timeline.startAge, 14, 40, 18);
+        s.plan = sanitizePlan(raw.plan);
         if (s.earners.length === 2) s.adults = 2;
         return s;
     }
@@ -130,27 +158,33 @@
     var state = defaultScenario();
     var undoStack = [], redoStack = [];
     var lastResult = null;
+    var lastProjection = null;
+    var ui = { age: null };
     var cache = { occupations: {}, programs: {}, careersForCip: {}, pathways: null, metros: {} };
 
     function snapshot() { return JSON.stringify(state); }
 
-    function commit(mutator, message) {
+    function commit(mutator, message, opts) {
         var before = snapshot();
         mutator(state);
         if (snapshot() === before) return;
         undoStack.push(before);
         if (undoStack.length > 60) undoStack.shift();
         redoStack = [];
-        afterChange(message);
+        afterChange(message, opts);
     }
 
-    function afterChange(message) {
+    function afterChange(message, opts) {
+        opts = opts || {};
         if (FP.storage.get('fp.remember') === true) FP.storage.set('fp.scenario', state);
-        renderAll();
+        if (opts.open) modalType = opts.open;
+        try { renderAll(); } catch (err) { /* keep the editor usable if a results pane fails */ }
+        if (opts.open) openTileModal(opts.open);
         ensureBundle();
         if (message) window.setTimeout(function () {
-            var r = lastResult;
-            FP.announce(message + (r ? '. Monthly costs ' + FP.money(r.costs.monthlyTotal) + ', ' + (r.monthlySurplus >= 0 ? FP.money(r.monthlySurplus) + ' left over.' : FP.money(-r.monthlySurplus) + ' short.') : ''));
+            var p = lastProjection;
+            var s = p && p.available ? snapAt(selectedAge().age) : null;
+            FP.announce(message + (p ? '. ' + p.overallStatus.message : '') + (s ? ' At age ' + s.age + ': ' + (s.leftoverMonthly >= 0 ? FP.money(s.leftoverMonthly) + ' left over a month.' : FP.money(-s.leftoverMonthly) + ' short a month.') : ''));
         }, 60);
     }
 
@@ -161,13 +195,14 @@
     function getTile(type) { return state.tiles.filter(function (t) { return t.type === type; })[0] || null; }
 
     function addTile(type, index) {
-        if (!TILES[type] || hasTile(type)) return;
+        if (!TILES[type]) return;
+        if (hasTile(type)) { openTileModal(type); return; }
         commit(function (s) {
             var t = defaultTile(type);
             if (type === 'roommates') { var apt = s.tiles.filter(function (x) { return x.type === 'apartment'; })[0]; if (apt && apt.bedrooms < 2) apt.bedrooms = 2; }
             if (type === 'children') { /* children change food, healthcare and taxes */ }
             if (index === undefined || index < 0 || index > s.tiles.length) s.tiles.push(t); else s.tiles.splice(index, 0, t);
-        }, 'Added ' + TILES[type].label);
+        }, 'Added ' + TILES[type].label, { open: type });
     }
     function removeTile(type) {
         if (!hasTile(type)) return;
@@ -189,6 +224,7 @@
     // ------------------------------------------------------------------ reference bundles
     var bundles = {};
     var bundleSeq = 0;
+    var projSeq = 0;
     var current = { key: '', bundle: null };
 
     function bundleKey(s) {
@@ -236,10 +272,26 @@
             showBudgetError(e.message);
             return;
         }
-        renderBudget(lastResult, current.bundle);
         renderPathSummary();
         renderTileModal();
         refreshCompareFromState();
+        var snap = snapshot(), bundle = current.bundle, my = ++projSeq;
+        setStale(true);
+        window.setTimeout(function () {
+            if (my !== projSeq) return;
+            try {
+                lastProjection = P.evaluate(JSON.parse(snap), bundle, DEF, { alternative: false });
+            } catch (e) {
+                if (my !== projSeq) return;
+                setStale(false);
+                showBudgetError(e.message);
+                return;
+            }
+            if (my !== projSeq) return;
+            setStale(false);
+            try { renderResults(); } catch (err) { /* tile editing must stay responsive */ }
+            scheduleAlternative();
+        }, 0);
     }
 
     function onBundle(b) {
@@ -260,7 +312,7 @@
                 el('span', { class: 'tile-icon', 'aria-hidden': 'true', text: t.icon }),
                 el('span', { class: 'tile-text' }, [el('span', { class: 'tile-label', text: t.label }), el('span', { class: 'tile-desc', text: t.desc })]),
                 el('button', { type: 'button', class: 'btn btn-sm ' + (active ? 'btn-light' : 'btn-outline-primary'), disabled: active, 'aria-label': active ? t.label + ' is in My Future' : 'Add ' + t.label + ' to My Future', 'aria-haspopup': 'dialog',
-                    onclick: function () { addTile(type); openTileModal(type); } }, [active ? 'Added' : 'Add'])
+                    onclick: function () { addTile(type); } }, [active ? 'Added' : 'Add'])
             ]);
             li.addEventListener('dragstart', function (e) { e.dataTransfer.setData('text/plain', JSON.stringify({ kind: 'tile', type: type })); e.dataTransfer.effectAllowed = 'copy'; li.classList.add('is-dragging'); });
             li.addEventListener('dragend', function () { li.classList.remove('is-dragging'); });
@@ -504,7 +556,8 @@
         var body = $('tileModalBody');
         body.textContent = '';
         body.appendChild(modalBody(t));
-        var add = monthlyWith(t.type, {});
+        var add = null;
+        try { add = monthlyWith(t.type, {}); } catch (err) { add = null; }
         $('tileModalCost').textContent = add === null ? '' : (add < 0 ? 'Saves you ' + FP.money(-add) + ' a month' : 'Adds about ' + FP.money(add) + ' a month');
         $('tileModalRemove').setAttribute('aria-label', 'Remove ' + TILES[t.type].label + ' from My Future');
         if (focusedId && $(focusedId)) $(focusedId).focus();
@@ -586,7 +639,7 @@
             e.preventDefault(); canvas.classList.remove('drag-over');
             var d = readDrag(e); if (!d) return;
             var idx = dropIndex(canvas, e.clientY);
-            if (d.kind === 'tile') { addTile(d.type, idx); openTileModal(d.type); }
+            if (d.kind === 'tile') addTile(d.type, idx);
             else if (d.kind === 'active') {
                 commit(function (s) {
                     var from = s.tiles.findIndex(function (t) { return t.type === d.type; });
@@ -975,21 +1028,466 @@
         return el('div', { class: 'hbar-row' }, [el('span', { class: 'hbar-label', text: label }), el('span', { class: 'hbar' }, [fill]), el('span', { class: 'hbar-value', text: FP.money(value) })]);
     }
 
-    function renderBudget(r, b) {
+    // ------------------------------------------------------------------ results: summary, age timeline, goals
+    var DECADES = [20, 30, 40, 50, 60, 70];
+    var GOAL_ICONS = { education: '\u{1F393}', house: '\u{1F3E1}', car: '\u{1F697}', travel: '✈️', savings: '\u{1F437}', retirement: '\u{1F334}' };
+    var GOAL_MARKERS = { education: 'School done', house: 'House', car: 'Car', travel: 'Travel', savings: 'Savings goal', retirement: 'Retire' };
+    var STATUS_CLASS = { on_track: 'ok', later: 'warn', not_achievable: 'bad', info: 'info' };
+    var STATUS_ICON = { ok: '✓', warn: '◷', bad: '!', info: '?' };
+    var OVERALL_CLASS = { achievable: 'ok', adjust: 'warn', not_funded: 'bad', info: 'info' };
+    var GAP_LABELS = { upfront_cash: 'Upfront cash', monthly_cash_flow: 'Monthly cash flow', retirement_funding: 'Retirement funding' };
+    var PLAN_FIELDS = {
+        endAge: [60, 90], planningAge: [60, 105], startingCash: [0, 10000000], startingInvestments: [0, 10000000], startingDebt: [0, 10000000], startingDebtRatePct: [0, 30],
+        trainingSupportMonthly: [0, 20000], studyIncomeMonthly: [0, 20000], retirementIncomeMonthly: [0, 20000],
+        firstChildAge: [16, 60], childSpacingYears: [1, 10], childcareYears: [0, 13], secondEarnerAge: [14, 80]
+    };
+
+    function statusPill(cls, text) {
+        return el('span', { class: 'status-pill status-' + cls }, [el('span', { 'aria-hidden': 'true', text: STATUS_ICON[cls] + ' ' }), text]);
+    }
+    function snapAt(age) { return lastProjection ? lastProjection.ageSnapshots.filter(function (s) { return s.age === age; })[0] || null : null; }
+    function goalOf(key) { return lastProjection ? lastProjection.goals.filter(function (g) { return g.key === key; })[0] || null : null; }
+    function preferredAge() { return hasTile('house') && typeof state.plan.goals.house === 'number' ? state.plan.goals.house : 30; }
+
+    /** The age shown in the summary: the chosen age, or the nearest modeled age with an explanation. */
+    function selectedAge() {
+        var h = lastProjection ? lastProjection.horizon : { startAge: state.timeline.startAge, endAge: state.plan.endAge };
+        var want = ui.age !== null ? ui.age : preferredAge();
+        var age = Math.min(Math.max(want, h.startAge), h.endAge);
+        var note = '';
+        if (want < h.startAge) note = 'Age ' + want + ' is before this scenario starts (age ' + h.startAge + '), so this shows age ' + age + '.';
+        else if (want > h.endAge) note = 'Age ' + want + ' is past the end of this timeline (age ' + h.endAge + '), so this shows age ' + age + '.';
+        return { age: age, wanted: want, note: note };
+    }
+
+    function setAge(age, focusCard) {
+        ui.age = age;
+        renderSummary();
+        renderAgeTimeline();
+        renderAgeDetail();
+        renderMobileBar();
+        if (focusCard) { var b = document.querySelector('#ageCards [data-age="' + age + '"]'); if (b) b.focus(); }
+    }
+
+    function renderResults() {
+        renderSummary();
+        renderAgeTimeline();
+        renderAgeDetail();
+        renderGoals();
+        renderGoalDates();
+        renderNumbers(lastResult);
+        renderBreakdown(lastResult);
+        renderEducation(lastResult);
+        renderYearTable();
+        renderSources(lastResult, current.bundle);
+        renderMobileBar();
+        renderCanvasSummaries();
+    }
+
+    // ---- SimpleBudgetSummary
+    function figure(label, value, sub, cls) {
+        return el('div', { class: 'fig ' + (cls || '') }, [
+            el('div', { class: 'fig-label', text: label }),
+            el('div', { class: 'fig-value', text: value }),
+            sub ? el('div', { class: 'fig-sub', text: sub }) : null
+        ]);
+    }
+
+    function renderSummary() {
         var box = $('budgetSummary');
         box.textContent = '';
-        var take = r.income.takeHomeMonthly, cost = r.costs.monthlyTotal, gap = r.monthlySurplus;
-        var hasIncome = r.income.earners.some(function (e) { return e.annualWage !== null; });
-        var gapBox = el('div', { class: 'gap-box ' + (!hasIncome ? 'gap-neutral' : (gap >= 0 ? 'gap-plus' : 'gap-minus')) }, hasIncome ? [
-            el('div', { class: 'gap-amount', text: FP.money(Math.abs(gap)) }),
-            el('div', { class: 'gap-label', text: gap >= 0 ? 'left over each month' : 'short each month' })
-        ] : [
-            el('div', { class: 'gap-amount', text: FP.money(cost) }),
-            el('div', { class: 'gap-label', text: 'estimated monthly costs. Choose a career to compare with pay.' })
+        var p = lastProjection;
+        if (!p) return;
+        var ov = p.overallStatus, cls = OVERALL_CLASS[ov.code];
+        box.appendChild(el('div', { class: 'overall overall-' + cls }, [el('span', { class: 'overall-icon', 'aria-hidden': 'true', text: STATUS_ICON[cls] }), el('strong', { text: ov.message })]));
+        if (!p.available) {
+            var ul = el('ul', { class: 'small mb-2 mt-2' });
+            (ov.missing || []).forEach(function (m) { ul.appendChild(el('li', { text: 'Needed: ' + m.text })); });
+            box.appendChild(ul);
+        }
+        var h = p.horizon, sel = selectedAge();
+        var select = el('select', { id: 'summaryAge', class: 'form-select form-select-sm w-auto' });
+        for (var a = h.startAge; a <= h.endAge; a++) {
+            var o = el('option', { value: String(a), text: String(a) });
+            if (a === sel.age) o.selected = true;
+            select.appendChild(o);
+        }
+        select.addEventListener('change', function () { setAge(Number(select.value)); });
+        box.appendChild(el('div', { class: 'd-flex align-items-center gap-2 mt-3' }, [el('label', { for: 'summaryAge', class: 'h5 mb-0', text: 'At age' }), select]));
+        if (sel.note) box.appendChild(el('p', { class: 'small text-body-secondary mb-0 mt-1', text: sel.note }));
+        var s = p.available ? snapAt(sel.age) : null;
+        var hasCareer = !(ov.missing || []).some(function (m) { return m.key === 'career'; });
+        var grid = el('div', { class: 'fig-grid mt-2' });
+        if (s) {
+            var parts = [];
+            if (s.livingMonthly) parts.push('living ' + FP.money(s.livingMonthly));
+            if (s.debtMonthly > 0.5) parts.push('debt ' + FP.money(s.debtMonthly));
+            if (s.savingsPlannedMonthly > 0.5) parts.push('savings ' + FP.money(s.savingsPlannedMonthly));
+            grid.appendChild(figure('Monthly take-home', FP.money(s.takeHomeMonthly), s.stage === 'training' ? 'Study income and support' : s.stage === 'retired' ? 'Retirement income you entered' : 'After taxes and deductions'));
+            grid.appendChild(figure('Planned spending', FP.money(s.plannedSpendingMonthly), parts.join(' + ')));
+            grid.appendChild(figure(s.leftoverMonthly >= 0 ? 'Left over' : 'Shortfall', FP.money(Math.abs(s.leftoverMonthly)), 'per month', s.leftoverMonthly >= 0 ? 'fig-plus' : 'fig-minus'));
+        } else {
+            grid.appendChild(figure('Monthly take-home', hasCareer ? 'Incomplete' : 'Not available', hasCareer ? 'Some data is missing' : 'Choose a career'));
+            grid.appendChild(figure('Planned spending', lastResult && lastResult.complete ? FP.money(lastResult.costs.monthlyTotal) : 'Incomplete', lastResult && lastResult.complete ? 'Today, with every card' : 'Some costs are missing'));
+            grid.appendChild(figure('Left over / Shortfall', 'Not available', 'Needs income and housing'));
+        }
+        box.appendChild(grid);
+        if (s && s.stage === 'training') box.appendChild(el('p', { class: 'small text-body-secondary mt-2 mb-0', text: 'You are in school or training at this age. A shortfall here needs support or savings; it is not a verdict on the whole plan.' }));
+        else if (s) box.appendChild(el('p', { class: 'small text-body-secondary mt-2 mb-0', text: 'This is the money picture at age ' + s.age + ' only. The message above covers every goal on your timeline.' }));
+        if (s && s.unfundedThisYear > 0.5) box.appendChild(el('p', { class: 'small text-danger-emphasis mt-1 mb-0', text: 'Unfunded shortfall this year: ' + FP.money(s.unfundedThisYear) + ' (cash has run out).' }));
+        if (!p.available && !hasCareer) {
+            box.appendChild(el('div', { class: 'd-flex flex-wrap gap-2 mt-3' }, [
+                el('button', { type: 'button', class: 'btn btn-sm btn-primary', onclick: function () { runReverse(); } }, ['Find careers that pay for this']),
+                el('button', { type: 'button', class: 'btn btn-sm btn-outline-primary', onclick: function () { $('careerInput').focus(); } }, ['Pick a career'])
+            ]));
+        }
+        box.appendChild(el('p', { class: 'illustrative-label mt-3 mb-0', text: 'Illustrative projection · Based on your selections and editable assumptions' }));
+    }
+
+    function renderMobileBar() {
+        var p = lastProjection, s = p && p.available ? snapAt(selectedAge().age) : null;
+        $('mbAge').textContent = String(selectedAge().age);
+        $('mbTake').textContent = s ? FP.money(s.takeHomeMonthly) : 'n/a';
+        $('mbCost').textContent = s ? FP.money(s.plannedSpendingMonthly) : (lastResult && lastResult.complete ? FP.money(lastResult.costs.monthlyTotal) : 'n/a');
+        $('mbGap').textContent = s ? (s.leftoverMonthly >= 0 ? FP.money(s.leftoverMonthly) + ' left' : FP.money(-s.leftoverMonthly) + ' short') : 'More info needed';
+        $('mobileBar').className = 'mobile-budget-bar no-print ' + (s ? (s.leftoverMonthly >= 0 ? 'is-plus' : 'is-minus') : '');
+    }
+
+    // ---- FutureAgeTimeline
+    function goalsDueBy(age) {
+        return (lastProjection.goals || []).filter(function (g) { return g.key !== 'education' && g.requestedAge <= age && (g.projectedAge === null || g.projectedAge > age); });
+    }
+
+    function ageCard(age) {
+        var p = lastProjection, h = p.horizon;
+        if (!p.available) return { icon: '❔', stage: 'More information needed', lines: ['Add a career and a place to live.'], money: '', status: { cls: 'info', text: 'More information needed' } };
+        if (age < h.startAge) return { icon: '⏪', stage: 'Before this scenario starts', lines: ['This scenario starts at age ' + h.startAge + '.'], money: '', status: { cls: 'info', text: 'Not modeled' } };
+        if (age > h.endAge) return { icon: '⏩', stage: 'Beyond this timeline', lines: ['The timeline ends at age ' + h.endAge + '.'], money: '', status: { cls: 'info', text: 'Not modeled' } };
+        var s = snapAt(age), ret = goalOf('retirement'), house = goalOf('house');
+        var stage = s.stage === 'training' ? 'In training' : s.stage === 'working' ? 'Working' : (ret && ret.status === 'not_achievable' ? 'Retired, not fully funded' : 'Retirement projected');
+        var icon = s.stage === 'training' ? '\u{1F393}' : s.stage === 'retired' ? '\u{1F334}' : (s.housing === 'own' ? '\u{1F3E1}' : '\u{1F4BC}');
+        var lines = [];
+        if (s.stage === 'training') lines.push('Sharing housing; career starts at ' + Math.ceil(h.careerStartAge));
+        else if (s.housing === 'own') lines.push('Owns a home');
+        else if (house && age >= house.requestedAge) lines.push(house.projectedAge === null ? 'Renting; home goal not reached' : 'Renting; home around ' + house.projectedAge);
+        else lines.push(s.housing === 'rent' ? 'Renting' : 'Housing not chosen');
+        var ev = s.events.filter(function (e) { return e !== 'Career starts'; })[0];
+        if (ev) lines.push(ev);
+        else if (s.kidsHome) lines.push(s.kidsHome + (s.kidsHome > 1 ? ' kids' : ' kid') + ' at home' + (s.kidsInCare ? ', ' + s.kidsInCare + ' in daycare' : ''));
+        var money = s.unfundedThisYear > 0.5 ? 'Unfunded gap ' + FP.money(s.unfundedThisYear / 12) + '/mo'
+            : (s.leftoverMonthly >= 0 ? FP.money(s.leftoverMonthly) + '/mo left over' : FP.money(-s.leftoverMonthly) + '/mo shortfall');
+        var status;
+        if (s.unfundedThisYear > 0.5) status = { cls: 'bad', text: 'Shortfall' };
+        else if (goalsDueBy(age).length) status = { cls: 'warn', text: 'Goal delayed' };
+        else if (s.leftoverMonthly < 0) status = { cls: 'warn', text: 'Using savings' };
+        else status = { cls: 'ok', text: 'On track' };
+        return { icon: icon, stage: stage, lines: lines.slice(0, 2), money: money, status: status };
+    }
+
+    function goalMarkers() {
+        if (!lastProjection || !lastProjection.available) return [];
+        return lastProjection.goals.filter(function (g) { return g.projectedAge !== null; }).map(function (g) {
+            return { key: g.key, age: g.projectedAge, text: GOAL_MARKERS[g.key] + ' around ' + g.projectedAge, icon: GOAL_ICONS[g.key] };
+        }).sort(function (a, b) { return a.age - b.age; });
+    }
+
+    function renderAgeTimeline() {
+        var p = lastProjection;
+        if (!p) return;
+        var h = p.horizon, sel = selectedAge();
+        var shown = ui.age !== null ? ui.age : sel.age;
+        $('horizonNote').textContent = p.available
+            ? 'Ages ' + h.startAge + ' to ' + h.endAge + ' in ' + h.dollarBasis + (h.mode === 'projected' ? ' (raises in projected mode)' : '') + '. Retirement money is checked to age ' + h.retirementPlanningAge + '. Starting age ' + h.startAge + ' is a scenario setting, not your birth date.'
+            : 'Add a career and a place to live to see your timeline.';
+        var btns = $('ageButtons');
+        btns.textContent = '';
+        DECADES.forEach(function (a) {
+            btns.appendChild(el('button', { type: 'button', role: 'radio', class: 'age-btn', 'aria-checked': String(shown === a), onclick: function () { setAge(a); } }, [String(a)]));
+        });
+        if (DECADES.indexOf(shown) < 0) btns.appendChild(el('span', { class: 'small text-body-secondary ms-1', text: 'Showing age ' + shown }));
+        var list = $('ageCards');
+        list.textContent = '';
+        var text = $('textTimeline');
+        text.textContent = '';
+        DECADES.forEach(function (a, i) {
+            var c = ageCard(a);
+            var btn = el('button', { type: 'button', class: 'age-card status-' + c.status.cls + (shown === a ? ' is-selected' : '') + (c.status.text === 'Not modeled' ? ' is-muted' : ''), dataset: { age: String(a) }, 'aria-pressed': String(shown === a),
+                'aria-label': 'Age ' + a + ': ' + c.stage + '. ' + c.lines.join('. ') + (c.money ? '. ' + c.money : '') + '. ' + c.status.text, onclick: function () { setAge(a); } }, [
+                el('span', { class: 'age-card-head' }, [el('span', { class: 'age-num', text: String(a) }), el('span', { class: 'age-icon', 'aria-hidden': 'true', text: c.icon })]),
+                el('span', { class: 'age-stage', text: c.stage }),
+                el('span', { class: 'age-lines' }, c.lines.map(function (l) { return el('span', { class: 'd-block', text: l }); })),
+                c.money ? el('span', { class: 'age-money', text: c.money }) : null,
+                statusPill(c.status.cls, c.status.text)
+            ]);
+            btn.addEventListener('keydown', function (e) {
+                var j = { ArrowRight: i + 1, ArrowDown: i + 1, ArrowLeft: i - 1, ArrowUp: i - 1, Home: 0, End: DECADES.length - 1 }[e.key];
+                if (j === undefined) return;
+                e.preventDefault();
+                setAge(DECADES[Math.max(0, Math.min(DECADES.length - 1, j))], true);
+            });
+            list.appendChild(el('li', {}, [btn]));
+            text.appendChild(el('li', { text: 'Age ' + a + ': ' + c.stage + '. ' + c.lines.join('. ') + (c.money ? '. ' + c.money : '') + '. ' + c.status.text + '.' }));
+        });
+        var track = $('milestoneTrack');
+        track.textContent = '';
+        var rows = [];
+        goalMarkers().forEach(function (m) {
+            var row = 0;
+            while (rows[row] !== undefined && m.age - rows[row] < 7) row++;
+            rows[row] = m.age;
+            var left = Math.max(2, Math.min(98, ((m.age - 20) / 10 + 0.5) / DECADES.length * 100));
+            var chip = el('span', { class: 'milestone milestone-' + m.key, text: m.icon + ' ' + m.text });
+            chip.style.left = left + '%';
+            chip.style.top = (row * 30) + 'px';
+            track.appendChild(chip);
+            text.appendChild(el('li', { text: m.text + ' (estimated).' }));
+        });
+        track.style.height = (rows.length ? rows.length * 30 + 4 : 0) + 'px';
+    }
+
+    // ---- AgeDetailPanel
+    function goalAtAge(g, age) {
+        if (g.projectedAge !== null && g.projectedAge <= age) return { cls: 'ok', text: g.key === 'retirement' ? 'Retired from ' + g.projectedAge : 'Done around ' + g.projectedAge };
+        if (age < g.requestedAge) return { cls: 'info', text: 'Planned for age ' + g.requestedAge };
+        return g.projectedAge !== null ? { cls: 'warn', text: 'Delayed; projected around ' + g.projectedAge } : { cls: 'bad', text: 'Not reached in this timeline' };
+    }
+
+    function renderAgeDetail() {
+        var box = $('ageDetail');
+        box.textContent = '';
+        var p = lastProjection;
+        if (!p) return;
+        var sel = selectedAge(), want = sel.wanted;
+        if (!p.available) {
+            box.appendChild(el('h3', { class: 'h6 mb-2', text: 'At age ' + sel.age + ': More information needed' }));
+            var miss = (p.overallStatus.missing || []).map(function (m) { return m.text; }).join('; ') || 'Choose a career and a place to live.';
+            var na = el('dl', { class: 'kv detail-kv small mb-2' });
+            [['Career or training', 'Not available'], ['Housing', hasTile('house') || hasTile('apartment') ? (hasTile('house') ? 'House selected' : 'Apartment selected') : 'Not chosen'],
+                ['Take-home pay', 'Not available'], ['Planned spending', lastResult && lastResult.complete ? FP.money(lastResult.costs.monthlyTotal) + '/mo today' : 'Incomplete'],
+                ['Left over / Shortfall', 'Not available']].forEach(function (row) { na.appendChild(el('dt', { text: row[0] })); na.appendChild(el('dd', { text: row[1] })); });
+            box.appendChild(na);
+            box.appendChild(el('p', { class: 'small mb-0', text: miss }));
+            return;
+        }
+        if (want < p.horizon.startAge) {
+            box.appendChild(el('h3', { class: 'h6 mb-1', text: 'Age ' + want + ': Before this scenario starts' }));
+            box.appendChild(el('p', { class: 'small mb-0', text: 'This scenario starts at age ' + p.horizon.startAge + '. Change the scenario starting age under "Change my goal dates" to model earlier years.' }));
+            var early = el('dl', { class: 'kv detail-kv small mb-0 mt-2' });
+            [['Modeled start', 'Age ' + p.horizon.startAge], ['This age', 'Before this scenario starts']].forEach(function (row) { early.appendChild(el('dt', { text: row[0] })); early.appendChild(el('dd', { text: row[1] })); });
+            box.appendChild(early);
+            return;
+        }
+        if (want > p.horizon.endAge) {
+            box.appendChild(el('h3', { class: 'h6 mb-1', text: 'Age ' + want + ': Beyond this timeline' }));
+            box.appendChild(el('p', { class: 'small mb-0', text: 'The timeline ends at age ' + p.horizon.endAge + '. You can extend it under "Change my goal dates".' }));
+            var late = el('dl', { class: 'kv detail-kv small mb-0 mt-2' });
+            [['Modeled end', 'Age ' + p.horizon.endAge], ['This age', 'Beyond this timeline']].forEach(function (row) { late.appendChild(el('dt', { text: row[0] })); late.appendChild(el('dd', { text: row[1] })); });
+            box.appendChild(late);
+            return;
+        }
+        var s = snapAt(sel.age);
+        if (!s) return;
+        var r = lastResult, e0 = r && r.income.earners[0];
+        var career = s.stage === 'training' ? 'In school or training' + (r && r.education.pathwayName ? ' (' + r.education.pathwayName + ')' : '') + '; career starts at ' + Math.ceil(p.horizon.careerStartAge)
+            : s.stage === 'retired' ? 'Retired' : ((e0 && e0.title) || 'Working') + (state.earners.length > 1 && s.age >= (state.plan.secondEarnerAge || Math.floor(p.horizon.careerStartAge)) ? ' + second earner' : '');
+        var houseTile = getTile('house'), apt = getTile('apartment');
+        var housing = s.stage === 'training' ? 'Shared housing (training assumption)'
+            : s.housing === 'own' ? 'Owns a ' + ((PRESETS.house[houseTile && houseTile.tier] || {}).label || '').toLowerCase() + ' home'
+            : s.housing === 'rent' ? 'Renting' + (apt ? ' a ' + bedLabel(apt.bedrooms).toLowerCase() : '') : 'Not chosen';
+        var household = state.adults + (state.adults > 1 ? ' adults' : ' adult') + (s.kidsHome ? ', ' + s.kidsHome + (s.kidsHome > 1 ? ' kids' : ' kid') + ' at home' : '') + (s.kidsInCare ? ' (' + s.kidsInCare + ' in daycare)' : '');
+        var b = s.balances;
+        var debt = b.studentDebt + b.otherDebt + b.mortgage;
+        var debtParts = [];
+        if (b.studentDebt > 0.5) debtParts.push('student ' + FP.money(b.studentDebt));
+        if (b.otherDebt > 0.5) debtParts.push('other ' + FP.money(b.otherDebt));
+        if (b.mortgage > 0.5) debtParts.push('mortgage ' + FP.money(b.mortgage));
+        var rows = [
+            ['Career or training', career], ['Housing', housing], ['Household', household],
+            ['Take-home pay', FP.money(s.takeHomeMonthly) + '/mo'], ['Planned spending', FP.money(s.plannedSpendingMonthly) + '/mo'],
+            [s.leftoverMonthly >= 0 ? 'Left over' : 'Shortfall', FP.money(Math.abs(s.leftoverMonthly)) + '/mo'],
+            ['Cash on hand', FP.money(b.cash)], ['Savings account', FP.money(b.savings)], ['Retirement account', FP.money(b.retirement)],
+            ['Debt', debt > 0.5 ? FP.money(debt) + ' (' + debtParts.join(', ') + ')' : 'None'],
+            ['Home equity', b.homeEquity > 0.5 ? FP.money(b.homeEquity) + ' (not spending money)' : 'None']
+        ];
+        if (s.cumulativeUnfunded > 0.5) rows.push(['Unfunded so far', FP.money(s.cumulativeUnfunded)]);
+        box.appendChild(el('h3', { class: 'h6 mb-2', text: 'At age ' + s.age + ': ' + (s.stage === 'training' ? 'In training' : s.stage === 'working' ? 'Working' : 'Retired') }));
+        var dl = el('dl', { class: 'kv detail-kv small mb-2' });
+        rows.forEach(function (row) { dl.appendChild(el('dt', { text: row[0] })); dl.appendChild(el('dd', { text: row[1] })); });
+        box.appendChild(dl);
+        var goalsUl = el('ul', { class: 'list-unstyled goal-progress small mb-1' });
+        p.goals.forEach(function (g) {
+            var st = goalAtAge(g, s.age);
+            goalsUl.appendChild(el('li', {}, [el('span', { 'aria-hidden': 'true', text: GOAL_ICONS[g.key] + ' ' }), g.label + ': ', statusPill(st.cls, st.text)]));
+        });
+        box.appendChild(goalsUl);
+        if (s.events.length) box.appendChild(el('p', { class: 'small mb-0', text: 'This year: ' + s.events.join(', ') + '.' }));
+    }
+
+    // ---- GoalMilestones
+    function gapText(gaps, age) {
+        return gaps.map(function (g) { return GAP_LABELS[g.type] + ' gap at ' + age + ': ' + FP.money(g.amount) + (g.type === 'monthly_cash_flow' ? '/month' : ''); }).join(' · ');
+    }
+
+    function renderGoals() {
+        var box = $('goalsList');
+        box.textContent = '';
+        var p = lastProjection;
+        if (!p) return;
+        if (!p.available) {
+            box.appendChild(el('div', { class: 'goal-row status-info' }, [statusPill('info', 'More information needed'),
+                el('span', { class: 'small ms-2', text: (p.overallStatus.missing || []).map(function (m) { return m.text; }).join('; ') })]));
+            return;
+        }
+        var ul = el('ul', { class: 'list-unstyled goal-list mb-0' });
+        p.goals.forEach(function (g) {
+            var cls = STATUS_CLASS[g.status] || 'info';
+            var when = 'Wanted at ' + g.requestedAge + ' · ' + (g.projectedAge !== null ? 'Projected around ' + g.projectedAge + (g.yearsDelayed ? ' (' + g.yearsDelayed + (g.yearsDelayed === 1 ? ' year' : ' years') + ' later)' : '') : 'Not within this timeline (to age ' + p.horizon.endAge + ')');
+            var gapsNow = gapText(g.gaps.atRequestedAge, g.requestedAge);
+            var gapsEnd = g.gaps.atEndAge.length ? gapText(g.gaps.atEndAge, p.horizon.endAge).replace(/gap at \d+/g, 'gap still at ' + p.horizon.endAge) : '';
+            ul.appendChild(el('li', { class: 'goal-row status-' + cls }, [
+                el('span', { class: 'goal-icon', 'aria-hidden': 'true', text: GOAL_ICONS[g.key] }),
+                el('div', { class: 'goal-main' }, [
+                    el('div', { class: 'd-flex flex-wrap align-items-center gap-2' }, [el('strong', { text: g.label }), statusPill(cls, g.statusText)]),
+                    el('div', { class: 'small', text: when }),
+                    g.reason ? el('div', { class: 'small text-body-secondary', text: g.reason }) : null,
+                    gapsNow ? el('div', { class: 'small gap-line', text: gapsNow }) : null,
+                    gapsEnd ? el('div', { class: 'small gap-line', text: gapsEnd }) : null,
+                    g.conditional ? el('div', { class: 'small text-warning-emphasis', text: 'Depends on covering an earlier money gap first.' }) : null
+                ])
+            ]));
+        });
+        box.appendChild(ul);
+    }
+
+    // ---- RequestedVsProjected
+    var altSeq = 0, altTimer = null;
+    function scheduleAlternative() {
+        var my = ++altSeq;
+        window.clearTimeout(altTimer);
+        if (!lastProjection || !lastProjection.available || lastProjection.overallStatus.code === 'achievable') { renderAlternative(null); return; }
+        renderAlternative('pending');
+        var snap = JSON.parse(snapshot()), bundle = current.bundle;
+        altTimer = window.setTimeout(function () {
+            var alt;
+            try { alt = P.evaluate(snap, bundle, DEF).alternative; } catch (e) { alt = { available: false, feasible: false, reason: e.message, changes: [] }; }
+            if (my !== altSeq) return;
+            lastProjection.alternative = alt;
+            renderAlternative(alt);
+        }, 250);
+    }
+
+    function renderAlternative(alt) {
+        var box = $('alternativePanel');
+        box.textContent = '';
+        if (!alt) return;
+        box.appendChild(el('h3', { class: 'h6 mb-2', text: 'What your current path could support' }));
+        if (alt === 'pending') { box.appendChild(el('p', { class: 'small text-body-secondary mb-0', text: 'Checking what could fit with the same city, career and school...' })); return; }
+        if (!alt.available) { box.appendChild(el('p', { class: 'small mb-0', text: 'An alternative is not available: ' + alt.reason })); return; }
+        if (!alt.feasible) {
+            box.appendChild(el('div', { class: 'alt-none' }, [
+                el('p', { class: 'mb-1 fw-semibold', text: alt.reason }),
+                alt.changes.length ? el('p', { class: 'small mb-2', text: 'Even with: ' + alt.changes.map(function (c) { return c.alternative.toLowerCase(); }).join(', ') + '.' }) : null,
+                el('div', { class: 'd-flex flex-wrap gap-2' }, [
+                    el('button', { type: 'button', class: 'btn btn-sm btn-outline-primary', onclick: function () { runReverse(); } }, ['Compare careers']),
+                    el('button', { type: 'button', class: 'btn btn-sm btn-outline-primary', onclick: function () { showActions(); tryOtherCities(); } }, ['Try another city'])
+                ])
+            ]));
+            return;
+        }
+        var table = el('table', { class: 'table table-sm alt-table mb-2' }, [
+            el('caption', { class: 'visually-hidden', text: 'Your requested future compared with a projected alternative' }),
+            el('thead', {}, [el('tr', {}, [el('th', { scope: 'col', text: 'You requested' }), el('th', { scope: 'col', text: 'Projected alternative' }), el('th', { scope: 'col', text: 'Why' })])])
         ]);
-        box.appendChild(gapBox);
+        var tb = el('tbody');
+        alt.changes.forEach(function (c) { tb.appendChild(el('tr', {}, [el('td', { text: c.requested }), el('td', { text: c.alternative }), el('td', { class: 'small', text: c.why })])); });
+        table.appendChild(tb);
+        box.appendChild(el('div', { class: 'table-responsive' }, [table]));
+        var chips = el('div', { class: 'd-flex flex-wrap gap-2 mb-2' });
+        alt.goals.forEach(function (g) { chips.appendChild(statusPill(STATUS_CLASS[g.status] || 'info', g.label + (g.projectedAge !== null ? ' at ' + g.projectedAge : ''))); });
+        box.appendChild(el('p', { class: 'small mb-1', text: 'With these changes: ' + alt.overallStatus.message }));
+        box.appendChild(chips);
+        box.appendChild(el('p', { class: 'small text-body-secondary', text: 'Same city, career, school and family. Your requested future stays exactly as you built it unless you choose Apply.' }));
+        box.appendChild(el('div', { class: 'd-flex flex-wrap gap-2' }, [
+            el('button', { type: 'button', class: 'btn btn-sm btn-primary', id: 'applyAlternative', onclick: function () {
+                var copy = JSON.parse(JSON.stringify(alt.scenario));
+                commit(function (s) { Object.keys(copy).forEach(function (k) { s[k] = copy[k]; }); }, 'Applied the alternative. Undo brings back your original plan');
+            } }, ['Apply this alternative']),
+            el('button', { type: 'button', class: 'btn btn-sm btn-outline-primary', onclick: function () { addFuture(alt.scenario); } }, ['Add to compare'])
+        ]));
+    }
+
+    // ---- goal dates and starting point (inline controls)
+    function planField(id, label, value, onValue, attrs, help) {
+        var f = numberField(id, label, value, (attrs && attrs.placeholder) || '', onValue, attrs);
+        if (help) f.appendChild(el('div', { class: 'form-text small', text: help }));
+        return el('div', { class: 'col-6 col-md-4 col-xl-3' }, [f]);
+    }
+    function clampIn(v, lo, hi) { return v === null ? null : Math.min(hi, Math.max(lo, v)); }
+    function setGoal(key, v, lo, hi, def) { commit(function (s) { s.plan.goals[key] = v === null ? def : Math.round(clampIn(v, lo, hi)); }, 'Goal date updated'); }
+    function setPlan(key, v, def, whole) {
+        var r = PLAN_FIELDS[key];
+        commit(function (s) { var x = v === null ? def : clampIn(v, r[0], r[1]); s.plan[key] = whole && x !== null ? Math.round(x) : x; if (s.plan.planningAge < s.plan.endAge) s.plan.planningAge = s.plan.endAge; }, 'Plan updated');
+    }
+
+    function renderGoalDates() {
+        var box = $('goalDatesPanel');
+        if (box.hidden) return;
+        box.textContent = '';
+        var g = state.plan.goals, pl = state.plan;
+        box.appendChild(el('h3', { class: 'h6', text: 'When would you like each goal?' }));
+        var row1 = el('div', { class: 'row g-2' });
+        if (hasTile('house')) row1.appendChild(planField('goal-house', 'Buy a home at age', g.house, function (v) { setGoal('house', v, 14, 90, 30); }, { min: 14, max: 90, step: 1 }));
+        if (hasTile('car')) row1.appendChild(planField('goal-car', 'Buy your car at age', g.car, function (v) { setGoal('car', v, 14, 90, null); }, { min: 14, max: 90, step: 1, placeholder: 'When work starts' }));
+        if (hasTile('travel')) row1.appendChild(planField('goal-travel', 'Start traveling at age', g.travel, function (v) { setGoal('travel', v, 14, 90, null); }, { min: 14, max: 90, step: 1, placeholder: 'When work starts' }));
+        if (hasTile('savings')) {
+            row1.appendChild(planField('goal-savings-target', 'Savings target ($)', g.savingsTarget, function (v) { commit(function (s) { s.plan.goals.savingsTarget = v === null ? 10000 : clampIn(v, 0, 10000000); }, 'Savings target updated'); }, { min: 0, max: 10000000 }));
+            row1.appendChild(planField('goal-savings', 'Reach it by age', g.savings, function (v) { setGoal('savings', v, 14, 90, 30); }, { min: 14, max: 90, step: 1 }));
+        }
+        row1.appendChild(planField('goal-retirement', 'Retire at age', g.retirement, function (v) { setGoal('retirement', v, 40, 90, 67); }, { min: 40, max: 90, step: 1 }));
+        box.appendChild(row1);
+        box.appendChild(el('h3', { class: 'h6 mt-3', text: 'Your starting point' }));
+        var row2 = el('div', { class: 'row g-2' });
+        row2.appendChild(planField('plan-start-age', 'Scenario starting age', state.timeline.startAge, function (v) { commit(function (s) { s.timeline.startAge = v === null ? 18 : Math.round(clampIn(v, 14, 40)); }, 'Starting age updated'); }, { min: 14, max: 40, step: 1 }, 'A what-if age, not your birth date.'));
+        row2.appendChild(planField('plan-end-age', 'Timeline ends at age', pl.endAge, function (v) { setPlan('endAge', v, 70, true); }, { min: 60, max: 90, step: 1 }));
+        row2.appendChild(planField('plan-planning-age', 'Check retirement money to age', pl.planningAge, function (v) { setPlan('planningAge', v, 95, true); }, { min: 60, max: 105, step: 1 }));
+        row2.appendChild(planField('plan-cash', 'Cash you start with ($)', pl.startingCash, function (v) { setPlan('startingCash', v, 0); }, { min: 0, max: 10000000 }));
+        row2.appendChild(planField('plan-investments', 'Savings/investments you start with ($)', pl.startingInvestments, function (v) { setPlan('startingInvestments', v, 0); }, { min: 0, max: 10000000 }));
+        row2.appendChild(planField('plan-debt', 'Debt you already have ($)', pl.startingDebt, function (v) { setPlan('startingDebt', v, 0); }, { min: 0, max: 10000000 }, 'Repaid over 10 years.'));
+        row2.appendChild(planField('plan-debt-rate', 'Interest on that debt (%)', pl.startingDebtRatePct, function (v) { setPlan('startingDebtRatePct', v, 7); }, { min: 0, max: 30 }));
+        row2.appendChild(planField('plan-support', 'Family support while training ($/month)', pl.trainingSupportMonthly, function (v) { setPlan('trainingSupportMonthly', v, 0); }, { min: 0, max: 20000 }));
+        row2.appendChild(planField('plan-study-income', 'Income from work while studying ($/month)', pl.studyIncomeMonthly, function (v) { setPlan('studyIncomeMonthly', v, 0); }, { min: 0, max: 20000 }));
+        row2.appendChild(planField('plan-retire-income', 'Retirement income you expect ($/month)', pl.retirementIncomeMonthly, function (v) { setPlan('retirementIncomeMonthly', v, 0); }, { min: 0, max: 20000 }, 'For example a Social Security estimate or a pension. None is assumed.'));
+        box.appendChild(row2);
+        var kids = getTile('children');
+        if (kids || hasTile('childcare') || state.earners.length > 1) {
+            box.appendChild(el('h3', { class: 'h6 mt-3', text: 'Family timing' }));
+            var row3 = el('div', { class: 'row g-2' });
+            if (kids) row3.appendChild(planField('plan-first-child', 'First child arrives at your age', pl.firstChildAge, function (v) { setPlan('firstChildAge', v, 30, true); }, { min: 16, max: 60, step: 1 }));
+            if (kids && kids.count > 1) row3.appendChild(planField('plan-child-spacing', 'Years between children', pl.childSpacingYears, function (v) { setPlan('childSpacingYears', v, 2, true); }, { min: 1, max: 10, step: 1 }));
+            if (hasTile('childcare')) row3.appendChild(planField('plan-childcare-years', 'Years of daycare per child', pl.childcareYears, function (v) { setPlan('childcareYears', v, 5, true); }, { min: 0, max: 13, step: 1 }));
+            if (state.earners.length > 1) row3.appendChild(planField('plan-earner2', 'Second earner starts working at your age', pl.secondEarnerAge, function (v) { setPlan('secondEarnerAge', v, null, true); }, { min: 14, max: 80, step: 1, placeholder: 'When your career starts' }));
+            box.appendChild(row3);
+        }
+        box.appendChild(el('p', { class: 'small text-body-secondary mt-2 mb-0', text: 'Children, daycare and a second income only count when you add them. Changes update the timeline immediately and can be undone.' }));
+    }
+
+    function toggleGoalDates(open) {
+        var box = $('goalDatesPanel');
+        box.hidden = open === undefined ? !box.hidden : !open;
+        document.querySelector('[data-action=goal-dates]').setAttribute('aria-expanded', String(!box.hidden));
+        renderGoalDates();
+        if (!box.hidden) { var first = box.querySelector('input'); if (first) first.focus(); }
+    }
+
+    // ---- See the numbers
+    function renderNumbers(r) {
+        var box = $('budgetNumbers');
+        box.textContent = '';
+        if (!r) return;
+        var take = r.income.takeHomeMonthly, cost = r.costs.monthlyTotal;
+        var hasIncome = r.income.earners.some(function (e) { return e.annualWage !== null; });
         var max = Math.max(take, cost, 1);
-        box.appendChild(el('div', { class: 'hbars mt-3' }, [
+        box.appendChild(el('div', { class: 'hbars' }, [
             bar('Take-home pay', Math.max(0, take), max, 'fill-income'),
             bar('Monthly costs', cost, max, 'fill-cost')
         ]));
@@ -997,10 +1495,12 @@
             el('dt', { text: 'Pay before taxes' }), el('dd', { text: FP.money(r.income.grossAnnual) + '/yr' }),
             el('dt', { text: 'Estimated taxes' }), el('dd', { text: FP.money(r.income.taxes.total) + '/yr (' + FP.pct(r.income.taxes.effectiveRate, 1) + ')' }),
             el('dt', { text: 'Pre-tax retirement' }), el('dd', { text: FP.money(r.income.pretaxRetirementAnnual) + '/yr' }),
-            el('dt', { text: 'Take-home pay' }), el('dd', { text: FP.money(take) + '/mo' }),
+            el('dt', { text: 'Take-home pay' }), el('dd', { text: hasIncome ? FP.money(take) + '/mo' : 'Not available' }),
+            el('dt', { text: 'Left over / short' }), el('dd', { text: hasIncome ? FP.money(r.monthlySurplus, { signed: true }) + '/mo' : 'Not available' }),
             el('dt', { text: 'Costs covered' }), el('dd', { text: r.coveragePercent !== null ? Math.round(r.coveragePercent) + '%' : '—' })
         ]);
         box.appendChild(dl);
+        box.appendChild(el('p', { class: 'small text-body-secondary mb-1', text: 'This is today\'s full budget with every card at once. The timeline above adds each cost at the age it starts.' }));
         if (r.upfront.downPayment > 0) box.appendChild(el('p', { class: 'small mb-1', text: 'Cash needed to buy: ' + FP.money(r.upfront.downPayment) + ' down payment + about ' + FP.money(r.upfront.closingCosts) + ' closing costs.' }));
         if (!r.complete) box.appendChild(el('p', { class: 'small text-warning-emphasis mb-1', text: 'Some numbers are missing, so this budget is incomplete.' }));
         if (r.warnings.length) {
@@ -1008,16 +1508,6 @@
             r.warnings.forEach(function (w) { ul.appendChild(el('li', { text: w })); });
             box.appendChild(ul);
         }
-        renderBreakdown(r);
-        renderEducation(r);
-        renderTimeline(r);
-        renderSources(r, b);
-        renderSuggestions(r, b);
-        $('mbTake').textContent = FP.money(take);
-        $('mbCost').textContent = FP.money(cost);
-        $('mbGap').textContent = hasIncome ? (gap >= 0 ? FP.money(gap) + ' left' : FP.money(-gap) + ' short') : 'Add a career';
-        $('mobileBar').className = 'mobile-budget-bar no-print ' + (hasIncome ? (gap >= 0 ? 'is-plus' : 'is-minus') : '');
-        renderCanvasSummaries();
     }
 
     function renderCanvasSummaries() {
@@ -1114,6 +1604,19 @@
         var dy = b.dataYears || {};
         box.appendChild(el('p', { class: 'mb-1', text: 'Data years: wages May ' + dy.wages + '; rent ' + (dy.rentAcs || 'n/a') + ' (ACS) / ' + (dy.rentHud || 'n/a') + ' (HUD); home value ' + (dy.homeValue || 'n/a') + '; food ' + (dy.food || 'n/a') + '; tax year ' + dy.taxYear + '.' }));
         box.appendChild(el('p', { class: 'mb-0 text-body-secondary', text: 'Lines marked "Assumption" use FuturePath defaults you can change in Advanced assumptions. Taxes are a simplified estimate (standard deduction, wages only). ' }));
+        if (lastProjection && lastProjection.provenance) {
+            var pr = lastProjection.provenance;
+            box.appendChild(el('p', { class: 'mt-2 mb-1 fw-semibold', text: 'Projection assumptions' }));
+            box.appendChild(el('p', { class: 'mb-1', text: 'Dollar basis: today\'s dollars. Surplus rule: ' + pr.assumptions.surplusRule + ' Investment growth ' + pr.assumptions.investmentReturnPct + '%/yr. Emergency reserve ' + pr.assumptions.emergencyReserveMonths + ' months. Training living cost ' + FP.money(pr.assumptions.trainingLivingMonthly) + '/mo. Retirement income entered: ' + FP.money(pr.assumptions.retirementIncomeMonthly) + '/mo.' }));
+            var om = el('ul', { class: 'mb-2' });
+            (pr.omissions || []).forEach(function (o) { om.appendChild(el('li', { text: o })); });
+            box.appendChild(om);
+            if (pr.unavailable && pr.unavailable.length) {
+                var miss = el('ul', { class: 'mb-2' });
+                pr.unavailable.forEach(function (m) { miss.appendChild(el('li', { text: 'Unavailable: ' + m.text })); });
+                box.appendChild(miss);
+            }
+        }
         box.appendChild(el('a', { href: '/sources', text: 'All sources and assumptions' }));
     }
 
@@ -1142,7 +1645,7 @@
     }
 
     function suggestionList(title, items, emptyText) {
-        var out = $('suggestionResults');
+        var out = $('suggestionResults') || $('actionResults');
         if (!out) return;
         out.textContent = '';
         out.appendChild(el('div', { class: 'small fw-semibold mb-1', text: title }));
@@ -1301,9 +1804,15 @@
     // ------------------------------------------------------------------ compare futures
     var futures = [];
     var futureSeq = 0;
-    function addFuture() {
+    function showActions() {
+        var box = $('actionResults');
+        if (!box.querySelector('#suggestionResults')) box.appendChild(el('div', { id: 'suggestionResults' }));
+        box.scrollIntoView({ block: 'nearest' });
+    }
+
+    function addFuture(scenario) {
         if (futures.length >= 3) { FP.announce('You can compare up to three futures.'); return; }
-        futures.push({ id: ++futureSeq, scenario: JSON.parse(JSON.stringify(state)), result: null, bundleKey: '', reqSeq: 0, linked: futures.length === 0 });
+        futures.push({ id: ++futureSeq, scenario: JSON.parse(JSON.stringify(scenario || state)), result: null, bundleKey: '', reqSeq: 0, linked: futures.length === 0 });
         $('comparePanel').hidden = false;
         renderCompare();
         futures.forEach(computeFuture);
@@ -1451,9 +1960,11 @@
                 case 'redo': redo(); break;
                 case 'reset': commit(function (s) { var d = defaultScenario(); Object.keys(d).forEach(function (k) { s[k] = d[k]; }); }, 'Scenario reset'); $('careerInput').value = ''; $('collegeInput').value = ''; $('possibleCareers').textContent = ''; break;
                 case 'copy-link': copyLink(); break;
-                case 'print': document.querySelectorAll('.budget-panel details').forEach(function (d) { d.open = true; }); window.print(); break;
+                case 'print': document.querySelectorAll('#numbersDetails, #sourcesDetails, #textTimelineDetails').forEach(function (d) { d.open = true; }); window.print(); break;
                 case 'compare-add': addFuture(); break;
                 case 'reverse': runReverse(); break;
+                case 'adjust-lifestyle': showActions(); adjustHousing(); $('lifeHeading').scrollIntoView({ block: 'start' }); break;
+                case 'goal-dates': toggleGoalDates(); break;
             }
         });
         document.addEventListener('keydown', function (e) {
@@ -1514,5 +2025,5 @@
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
 
     // Exposed for automated UI tests only (no secrets in here).
-    window.FPBuilder = { getState: function () { return JSON.parse(JSON.stringify(state)); }, addTile: addTile, removeTile: removeTile, undo: undo, redo: redo, lastResult: function () { return lastResult; } };
+    window.FPBuilder = { getState: function () { return JSON.parse(JSON.stringify(state)); }, addTile: addTile, removeTile: removeTile, undo: undo, redo: redo, lastResult: function () { return lastResult; }, lastProjection: function () { return lastProjection; }, setAge: setAge };
 }(window, document));

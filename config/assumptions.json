@@ -30,7 +30,10 @@
     "hoaMonthly": { "value": 0, "label": "HOA fees", "unit": "USD/month", "min": 0, "max": 3000 },
     "closingCostPct": { "value": 3, "label": "Closing costs (one-time)", "unit": "percent of price", "min": 0, "max": 10 },
     "wageGrowthPct": { "value": 0, "label": "Yearly raise above inflation (projection mode)", "unit": "percent/year", "min": -5, "max": 15 },
-    "inflationPct": { "value": 0, "label": "Price inflation (projection mode)", "unit": "percent/year", "min": 0, "max": 15 }
+    "inflationPct": { "value": 0, "label": "Price inflation (projection mode)", "unit": "percent/year", "min": 0, "max": 15 },
+    "emergencyReserveMonths": { "value": 3, "label": "Emergency reserve kept before big purchases", "unit": "months of spending", "min": 0, "max": 24 },
+    "investmentReturnPct": { "value": 0, "label": "Savings growth above inflation", "unit": "percent/year", "min": -5, "max": 12, "note": "Zero by default: the timeline shows no investment growth unless you add it." },
+    "trainingLivingMonthly": { "value": 1100, "label": "Living costs while in school or training (shared housing)", "unit": "USD/month", "min": 0, "max": 6000 }
   },
   "presets": {
     "note": "Lifestyle levels scale the editable assumptions above (house: the metro median home value). They are illustrative teaching levels, not quotes.",

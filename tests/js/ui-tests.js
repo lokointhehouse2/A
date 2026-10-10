@@ -97,7 +97,11 @@
             lux.click();
             log(getTileOf(w, 'car').tier === 'luxury' && costs(w) > c2, 'choosing a luxury car raises costs', c2 + ' -> ' + costs(w));
             q(w, '#palette [data-tile=travel] button').click();
-            var plus = await waitFor(function () { return q(w, '#trip-cruise-plus'); }, 3000, 'trip stepper');
+            if (!q(w, '#trip-cruise-plus')) {
+                var travelToggle = q(w, '#canvas [data-tile=travel] .tile-toggle');
+                if (travelToggle) travelToggle.click();
+            }
+            var plus = await waitFor(function () { return q(w, '#trip-cruise-plus') || q(w, 'button[aria-label="More cruises"]'); }, 8000, 'trip stepper');
             var c3 = costs(w);
             plus.click();
             log(getTileOf(w, 'travel').trips.cruise === 1 && costs(w) > c3, 'adding a cruise a year raises the travel budget', c3 + ' -> ' + costs(w));
@@ -128,6 +132,17 @@
             log(w.document.querySelectorAll('.compare-col dd.is-diff').length > 0, 'compare highlights only differing values');
 
             log(w.__noReloadMarker === 42, 'no full page reload happened during all edits');
+
+            // Age timeline: six cards, accessible buttons, selecting 40 updates the summary without a reload.
+            await waitFor(function () { return w.document.querySelectorAll('#ageCards .age-card').length === 6 && w.FPBuilder.lastProjection(); }, 15000, 'age cards');
+            log(w.document.querySelectorAll('#ageCards .age-card').length === 6, 'six decade cards render');
+            log(w.document.querySelectorAll('#ageButtons [role=radio]').length >= 6, 'age buttons are keyboard selectable');
+            log(w.document.getElementById('numbersDetails') && !w.document.getElementById('numbersDetails').open, 'See the numbers stays collapsed');
+            w.FPBuilder.setAge(40);
+            await waitFor(function () { return /40/.test(q(w, '#budgetSummary').textContent) && q(w, '#ageCards [data-age="40"]').getAttribute('aria-pressed') === 'true'; }, 3000, 'age 40 selected');
+            log(/At age/.test(q(w, '#budgetSummary').textContent) && q(w, '#ageCards [data-age="40"]').getAttribute('aria-pressed') === 'true', 'selecting age 40 updates the summary and cards');
+            await waitFor(function () { return q(w, '#ageDetail .detail-kv'); }, 5000, 'age detail');
+            log(!!q(w, '#ageDetail .detail-kv'), 'inline age detail is visible');
         } catch (e) {
             log(false, 'desktop flow', e.message);
         }

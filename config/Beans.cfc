@@ -44,6 +44,9 @@ component {
         b.loans = new modules.finance.LoanCalculatorService();
         b.reference = new modules.simulator.ReferenceDataService( b.config, b.geography, b.occupations, b.wages, b.housing, b.taxes, b.institutions );
         b.simulator = new modules.simulator.LifestyleSimulatorService( b.config, b.taxes, b.loans );
+        b.timeline = new modules.simulator.TimelineProjectionService( b.simulator, b.loans );
+        b.goals = new modules.simulator.GoalFeasibilityService( b.timeline );
+        b.goals.setAlternative( new modules.simulator.AffordableAlternativeService( b.timeline, b.goals ) );
         b.reverseSearch = new modules.simulator.ReverseCareerSearchService( b.simulator, b.wages );
         b.scenarios = new modules.simulator.ScenarioStore( b.config );
 

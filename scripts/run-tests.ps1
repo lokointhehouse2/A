@@ -9,6 +9,10 @@ Write-Step 'JS engine (node tests/js/engine.test.js)'
 & node tests/js/engine.test.js
 if ($LASTEXITCODE -ne 0) { $failed = $true }
 
+Write-Step 'Age projection (node tests/js/projection.test.js --parity)'
+& node tests/js/projection.test.js --parity
+if ($LASTEXITCODE -ne 0) { $failed = $true }
+
 Write-Step 'TestBox suite (/dev/tests)'
 $report = (Invoke-WebRequest -Uri "$base/dev/tests" -UseBasicParsing -TimeoutSec 600).Content
 $summary = ($report -split "`n" | Select-String 'Passed: .*Failed: .*Errors' | Select-Object -Last 1).ToString()

@@ -92,7 +92,34 @@ component {
             if ( isNumeric( a ) && a >= 14 && a <= 80 && arrayLen( s.timeline.ages ) < 8 ) arrayAppend( s.timeline.ages, int( a ) );
         }
         arraySort( s.timeline.ages, "numeric" );
+        s.plan = normalizePlan( isStruct( r.plan ?: "" ) ? r.plan : {}, v );
         return s;
+    }
+
+    /** Timeline plan (starting position, goal ages). Older scenarios without a plan get these defaults. */
+    private struct function normalizePlan( required struct rawPlan, required any validator ) {
+        var p = arguments.rawPlan;
+        var v = arguments.validator;
+        var out = {};
+        out.endAge = v.intInRange( p.endAge ?: 70, 60, 90, 70, "plan.endAge" );
+        out.planningAge = v.intInRange( p.planningAge ?: 95, out.endAge, 105, max( 95, out.endAge ), "plan.planningAge" );
+        for ( var k in [ "startingCash", "startingInvestments", "startingDebt" ] ) out[ k ] = v.numberInRange( p[ k ] ?: 0, 0, 10000000, 0, "plan.#k#" );
+        out.startingDebtRatePct = v.numberInRange( p.startingDebtRatePct ?: 7, 0, 30, 7, "plan.startingDebtRatePct" );
+        for ( var k in [ "trainingSupportMonthly", "studyIncomeMonthly", "retirementIncomeMonthly" ] ) out[ k ] = v.numberInRange( p[ k ] ?: 0, 0, 20000, 0, "plan.#k#" );
+        out.firstChildAge = v.intInRange( p.firstChildAge ?: 30, 16, 60, 30, "plan.firstChildAge" );
+        out.childSpacingYears = v.intInRange( p.childSpacingYears ?: 2, 1, 10, 2, "plan.childSpacingYears" );
+        out.childcareYears = v.intInRange( p.childcareYears ?: 5, 0, 13, 5, "plan.childcareYears" );
+        out.secondEarnerAge = isNull( p.secondEarnerAge ) || !len( toString( p.secondEarnerAge ) ) ? javacast( "null", "" ) : v.intInRange( p.secondEarnerAge, 14, 80, 22, "plan.secondEarnerAge" );
+        var g = isStruct( p.goals ?: "" ) ? p.goals : {};
+        out.goals = {};
+        for ( var k in [ "house", "car", "travel", "savings" ] ) {
+            var fallback = ( k == "house" || k == "savings" ) ? 30 : javacast( "null", "" );
+            if ( structKeyExists( g, k ) ) out.goals[ k ] = isNull( g[ k ] ) || !len( toString( g[ k ] ) ) ? javacast( "null", "" ) : v.intInRange( g[ k ], 14, 90, 30, "plan.goals.#k#" );
+            else out.goals[ k ] = fallback;
+        }
+        out.goals.savingsTarget = v.numberInRange( g.savingsTarget ?: 10000, 0, 10000000, 10000, "plan.goals.savingsTarget" );
+        out.goals.retirement = v.intInRange( g.retirement ?: 67, 40, 90, 67, "plan.goals.retirement" );
+        return out;
     }
 
     private struct function normalizeTile( required struct t, required any v ) {

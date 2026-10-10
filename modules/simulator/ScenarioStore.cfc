@@ -27,7 +27,7 @@ component {
             household: { value: serializeJSON( { adults: s.adults, tiles: s.tiles, state: s.state, nycResident: s.nycResident, filingStatus: s.filingStatus, taxYear: s.taxYear } ), cfsqltype: "longvarchar" },
             education: { value: serializeJSON( s.education ), cfsqltype: "longvarchar" },
             income: { value: serializeJSON( s.earners ), cfsqltype: "longvarchar" },
-            assumptions: { value: serializeJSON( { assumptions: s.assumptions, timeline: s.timeline } ), cfsqltype: "longvarchar" },
+            assumptions: { value: serializeJSON( { assumptions: s.assumptions, timeline: s.timeline, plan: s.plan ?: {} } ), cfsqltype: "longvarchar" },
             years: { value: isStruct( arguments.result ) ? serializeJSON( arguments.result.dataYears ?: {} ) : "{}", cfsqltype: "longvarchar" }
         }, { datasource: variables.dsn } );
         if ( isStruct( arguments.result ) ) {
@@ -53,7 +53,7 @@ component {
                 v: 1, cbsa: r.cbsa_code, state: household.state, nycResident: household.nycResident, filingStatus: household.filingStatus,
                 taxYear: household.taxYear, adults: household.adults, tiles: household.tiles,
                 earners: deserializeJSON( r.income_json ), education: deserializeJSON( r.education_json ),
-                assumptions: extra.assumptions, timeline: extra.timeline
+                assumptions: extra.assumptions, timeline: extra.timeline, plan: extra.plan ?: {}
             }
         };
     }
